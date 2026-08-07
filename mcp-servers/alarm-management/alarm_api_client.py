@@ -1,10 +1,10 @@
 """Async HTTP client for the Alarm Management API.
 
 Every MCP tool handler talks to the Alarm API through this single
-client. Centralising auth, trace propagation, timeouts, and error
-mapping here means the four tool handlers stay thin and focused,
-and Feature 3.3 can add retries / circuit breakers on top of
-``get_json`` / ``post_json`` without touching any handler.
+client. Centralising auth, trace propagation, timeouts, retries,
+and error mapping here means the four tool handlers stay thin
+and focused, and resilience tweaks (Feature 3.3) land in one
+module.
 
 Hard constraint #1 from the brief ("the copilot must call the
 Alarm Management API exclusively through the MCP server") is
@@ -17,10 +17,10 @@ through ``server.alarm_api_client``.
 What we deliberately don't do here
 ----------------------------------
 
-* **No retries.** Feature 3.3 (MCP Reliability) layers tenacity on
-  top. The interface (``get_json`` / ``post_json``) stays the same.
+* **No circuit breaker.** Cross-call failure-rate tracking is a
+  Feature 3.5 concern.
 * **No connection pooling tuning.** Default ``httpx`` limits are
-  fine for the four-tool MCP surface; the orchestrator is single
+  fine for the four-tool MCP surface; the orchestrator is a single
   user in a synchronous conversation.
 * **No streaming.** All alarm-api endpoints are request/response;
   none stream. Feature 3.5 (advanced ops) might add it.
@@ -36,12 +36,13 @@ from core.config import Settings
 from core.logging import get_logger
 
 from .registry import ToolInvocationError
+from .retry import RetryPolicy, retry_with_policy
 
 log = get_logger(__name__)
 
-# Default per-request timeout. Feature 3.3 may override this from
-# settings; keeping it as a constant so the constructor signature
-# stays simple.
+# Default per-request timeout. Surfaced via ``Settings`` in
+# Feature 3.3 so an operator can tune tail latency without code
+# changes; the constant remains as the constructor default.
 _DEFAULT_TIMEOUT_S = 5.0
 
 
@@ -98,10 +99,12 @@ class AlarmApiClient:
         base_url: str,
         token: SecretStr,
         timeout_seconds: float = _DEFAULT_TIMEOUT_S,
+        retry_policy: RetryPolicy | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._token = token
+        self._retry_policy = retry_policy or RetryPolicy()
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
             base_url=self._base_url,
@@ -117,11 +120,16 @@ class AlarmApiClient:
 
         Keeps ``ALARM_API_BASE_URL`` and ``ALARM_API_TOKEN`` as the
         single source of truth — same env vars the alarm-api
-        simulator reads for its own port. No new env vars.
+        simulator reads for its own port. The retry policy is
+        derived from the ``alarm_api_max_attempts`` /
+        ``alarm_api_initial_backoff_s`` / ``alarm_api_max_backoff_s``
+        fields added in Feature 3.3.
         """
         return cls(
             base_url=settings.alarm_api_base_url,
             token=settings.alarm_api_token,
+            timeout_seconds=settings.alarm_api_timeout_s,
+            retry_policy=RetryPolicy.from_settings(settings),
         )
 
     async def get_json(
@@ -132,62 +140,108 @@ class AlarmApiClient:
     ) -> dict[str, Any]:
         """Issue ``GET <base_url><path>`` and return the parsed JSON body.
 
+        Wrapped in a :class:`RetryPolicy` so transient 5xx, 408,
+        425, 429, and the documented transport exceptions are
+        retried with bounded exponential back-off + jitter. The
+        four tool handlers see the same interface as Feature 3.2
+        and the same exception envelope.
+
         Raises
         ------
         AlarmNotFoundError
-            If the alarm-api returns 404.
+            If the alarm-api returns 404 (never retried — first
+            404 always surfaces).
         ToolInvocationError
-            For any other non-2xx response, or transport errors
-            (``httpx.HTTPError`` family — connect, timeout, etc.).
-            The message is sanitised; no token, no body, no URL with
-            credentials.
+            For any other non-2xx response after retries are
+            exhausted, or for non-retryable transport errors.
+            The message is sanitised; no token, no body, no URL
+            with credentials.
         """
+        @retry_with_policy(self._retry_policy)
+        async def _attempt() -> httpx.Response:
+            try:
+                response = await self._client.get(
+                    path, params=params, headers=self._headers()
+                )
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                # ``HTTPStatusError`` is re-raised so the retry
+                # decorator can decide retry-vs-surface based on
+                # the status code (5xx, 408, 425, 429 are
+                # retried; everything else falls through to
+                # ``_raise_for_status`` in the post-retry shim).
+                #
+                # Retryable transport exceptions (``ConnectError``,
+                # ``ReadTimeout``, etc.) are also re-raised so the
+                # retry decorator sees them. Non-retryable
+                # transport exceptions (``InvalidURL``,
+                # ``UnsupportedProtocol``) are wrapped here in the
+                # sanitised envelope.
+                if isinstance(exc, httpx.HTTPStatusError):
+                    raise
+                if self._retry_policy.is_retryable_exception(exc):
+                    raise
+                log.warning(
+                    "alarm_api.transport_error",
+                    method="GET",
+                    path=path,
+                    error_type=type(exc).__name__,
+                    exc_info=True,
+                )
+                raise ToolInvocationError(
+                    "Upstream Alarm API call failed.",
+                    hint="See server logs with the same trace_id for details.",
+                ) from exc
+            return response
+
         try:
-            response = await self._client.get(path, params=params, headers=self._headers())
-            response.raise_for_status()
+            response = await _attempt()
         except httpx.HTTPStatusError as exc:
+            # Retry exhausted (or non-retryable): map the status
+            # to the right envelope.
             self._raise_for_status(exc)
-        except httpx.HTTPError as exc:
-            # Transport-level failure (connect, read timeout, etc.).
-            # The exception message usually contains the URL but never
-            # the bearer token; still, we replace it with a sanitised
-            # envelope before re-raising as ToolInvocationError so
-            # callers can't accidentally leak it.
-            log.warning(
-                "alarm_api.transport_error",
-                method="GET",
-                path=path,
-                error_type=type(exc).__name__,
-                exc_info=True,
-            )
-            raise ToolInvocationError(
-                "Upstream Alarm API call failed.",
-                hint="See server logs with the same trace_id for details.",
-            ) from exc
+            # Unreachable: ``_raise_for_status`` always raises.
+            raise AssertionError("unreachable") from exc  # pragma: no cover
         return response.json()
 
     async def post_json(self, path: str, *, json: dict[str, Any]) -> dict[str, Any]:
         """Issue ``POST <base_url><path>`` with a JSON body and parse the response.
 
-        Raises the same exceptions as ``get_json``.
+        Raises the same exceptions as ``get_json``. The retry
+        policy applies identically because the alarm-api's
+        recommendation endpoint is idempotent under a single
+        ``alarm_id``.
         """
+        @retry_with_policy(self._retry_policy)
+        async def _attempt() -> httpx.Response:
+            try:
+                response = await self._client.post(
+                    path, json=json, headers=self._headers()
+                )
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                if isinstance(exc, httpx.HTTPStatusError):
+                    raise
+                if self._retry_policy.is_retryable_exception(exc):
+                    raise
+                log.warning(
+                    "alarm_api.transport_error",
+                    method="POST",
+                    path=path,
+                    error_type=type(exc).__name__,
+                    exc_info=True,
+                )
+                raise ToolInvocationError(
+                    "Upstream Alarm API call failed.",
+                    hint="See server logs with the same trace_id for details.",
+                ) from exc
+            return response
+
         try:
-            response = await self._client.post(path, json=json, headers=self._headers())
-            response.raise_for_status()
+            response = await _attempt()
         except httpx.HTTPStatusError as exc:
             self._raise_for_status(exc)
-        except httpx.HTTPError as exc:
-            log.warning(
-                "alarm_api.transport_error",
-                method="POST",
-                path=path,
-                error_type=type(exc).__name__,
-                exc_info=True,
-            )
-            raise ToolInvocationError(
-                "Upstream Alarm API call failed.",
-                hint="See server logs with the same trace_id for details.",
-            ) from exc
+            raise AssertionError("unreachable") from exc  # pragma: no cover
         return response.json()
 
     async def aclose(self) -> None:
@@ -224,14 +278,21 @@ class AlarmApiClient:
     def _raise_for_status(exc: httpx.HTTPStatusError) -> None:
         """Map alarm-api non-2xx responses to MCP ``ToolInvocationError``.
 
+        Called from ``get_json`` / ``post_json`` after the retry
+        layer has exhausted its attempts. By the time we reach
+        here, retryable status codes have already had their
+        retries; we map them to the same envelopes the rest
+        get, with the standard sanitised message.
+
         404 → ``AlarmNotFoundError`` (used by ``get_alarm`` and
         ``recommend_actions`` for precise "alarm not found" without
         the alarm-api URL leaking).
 
-        All other non-2xx → generic ``ToolInvocationError`` with a
+        All other non-2xx (including retryable ones after
+        exhaustion) → generic ``ToolInvocationError`` with a
         sanitised message. We log the body server-side for
-        debugging; the message on the wire carries no token, no URL
-        with credentials, no body.
+        debugging; the message on the wire carries no token, no
+        URL with credentials, no body.
         """
         status = exc.response.status_code
         if status == 404:
