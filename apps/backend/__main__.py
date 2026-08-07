@@ -24,5 +24,10 @@ def health() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    log.info("starting", component="copilot-backend", port=settings.backend_port)
-    uvicorn.run(app, host="0.0.0.0", port=settings.backend_port)
+    # The container port is fixed by docker-compose.yml (the second
+    # number in the 'ports:' mapping). settings.backend_port is the
+    # HOST port and is for client code that needs to reach this
+    # service over the host network.
+    container_port = 8000
+    log.info("starting", component="copilot-backend", port=container_port)
+    uvicorn.run(app, host="0.0.0.0", port=container_port)

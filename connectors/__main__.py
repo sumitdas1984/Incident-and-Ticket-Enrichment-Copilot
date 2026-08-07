@@ -20,5 +20,8 @@ def health() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    log.info("starting", component="ticket-mock", port=settings.ticketing_api_port)
-    uvicorn.run(app, host="0.0.0.0", port=settings.ticketing_api_port)
+    # The container port is fixed by docker-compose.yml. settings.ticketing_api_port
+    # is the HOST port for client code.
+    container_port = 8000
+    log.info("starting", component="ticket-mock", port=container_port)
+    uvicorn.run(app, host="0.0.0.0", port=container_port)
