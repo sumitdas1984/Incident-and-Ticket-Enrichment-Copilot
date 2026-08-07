@@ -10,10 +10,16 @@ from datetime import UTC, datetime
 
 from core.domain import Alarm, Asset, Severity
 
-# 5 assets across 3 sites / 3 units. The names mirror the examples
+# 7 assets across 4 sites / 4 units. The names mirror the examples
 # the Postman collection uses (Boiler Feed Pump 101, Compressor C1,
 # Motor M1, etc.) so `?query=Boiler`, `?query=compressor`, `?query=motor`
-# each return at least one hit.
+# each return at least one hit. Three motors live in Unit 5 so that
+# CHAIN-08 (Motor Correlation) can chain through three distinct ids.
+#
+# Every asset populates `metadata["unit"]` because the store's
+# search_assets() filter reads from `asset.metadata.get("unit")`,
+# not from the top-level `unit` field. Keeping the two in sync is
+# regression-tested in tests/integration/alarm_api/test_seed.py.
 SEED_ASSETS: list[Asset] = [
     Asset(
         id="asset-bfp-101",
@@ -21,6 +27,7 @@ SEED_ASSETS: list[Asset] = [
         site="EastRefinery",
         unit="Unit 1",
         asset_class="pump",
+        metadata={"unit": "Unit 1"},
     ),
     Asset(
         id="asset-bfp-102",
@@ -28,6 +35,7 @@ SEED_ASSETS: list[Asset] = [
         site="EastRefinery",
         unit="Unit 1",
         asset_class="pump",
+        metadata={"unit": "Unit 1"},
     ),
     Asset(
         id="asset-comp-c1",
@@ -35,6 +43,7 @@ SEED_ASSETS: list[Asset] = [
         site="NorthPlant",
         unit="Unit 2",
         asset_class="compressor",
+        metadata={"unit": "Unit 2"},
     ),
     Asset(
         id="asset-motor-m1",
@@ -42,6 +51,23 @@ SEED_ASSETS: list[Asset] = [
         site="SouthPlant",
         unit="Unit 5",
         asset_class="motor",
+        metadata={"unit": "Unit 5"},
+    ),
+    Asset(
+        id="asset-motor-m2",
+        name="Motor M2",
+        site="SouthPlant",
+        unit="Unit 5",
+        asset_class="motor",
+        metadata={"unit": "Unit 5"},
+    ),
+    Asset(
+        id="asset-motor-m3",
+        name="Motor M3",
+        site="SouthPlant",
+        unit="Unit 5",
+        asset_class="motor",
+        metadata={"unit": "Unit 5"},
     ),
     Asset(
         id="asset-bfp-201",
@@ -49,14 +75,16 @@ SEED_ASSETS: list[Asset] = [
         site="WestRefinery",
         unit="Unit 4",
         asset_class="pump",
+        metadata={"unit": "Unit 4"},
     ),
 ]
 
 
-# 8 alarms across the 5 assets, 5 severities represented, 2/3
+# 10 alarms across the 7 assets, 5 severities represented, 4/10
 # acknowledged — enough variety to make the summary / trend /
 # correlation / flood / rationalization endpoints produce
-# non-trivial responses.
+# non-trivial responses. The two extra motor alarms (M2, M3) give
+# CHAIN-08's later summary call real data to aggregate.
 SEED_ALARMS: list[Alarm] = [
     Alarm(
         id="alarm-bfp-101-001",
@@ -105,6 +133,22 @@ SEED_ALARMS: list[Alarm] = [
         message="Motor temp rising",
         raised_at=datetime(2026, 6, 19, 13, 0, tzinfo=UTC),
         acknowledged=False,
+    ),
+    Alarm(
+        id="alarm-motor-m2-001",
+        asset_id="asset-motor-m2",
+        severity=Severity.MEDIUM,
+        message="Motor bearing wear",
+        raised_at=datetime(2026, 6, 22, 9, 30, tzinfo=UTC),
+        acknowledged=False,
+    ),
+    Alarm(
+        id="alarm-motor-m3-001",
+        asset_id="asset-motor-m3",
+        severity=Severity.LOW,
+        message="Motor noise",
+        raised_at=datetime(2026, 6, 23, 14, 15, tzinfo=UTC),
+        acknowledged=True,
     ),
     Alarm(
         id="alarm-bfp-201-001",
