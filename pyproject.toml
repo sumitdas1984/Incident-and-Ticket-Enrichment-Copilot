@@ -37,6 +37,7 @@ packages = [
     "rag.retrieval",
     "rag.tests",
     "connectors",
+    "connectors.alarm_api",
 ]
 
 [tool.setuptools.package-dir]

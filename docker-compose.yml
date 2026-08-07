@@ -5,11 +5,8 @@ services:
     build:
       context: .
       args:
-        SERVICE_NAME: alarm-api-simulator
+        MODULE_PATH: connectors.alarm_api
     container_name: alarm-api
-    # required: false so 'docker compose config' and 'docker compose up'
-    # work from a clean clone before the user has copied .env.example to
-    # .env. Placeholder services don't actually consume these vars.
     env_file:
       - path: .env
         required: false
@@ -25,7 +22,7 @@ services:
     build:
       context: .
       args:
-        SERVICE_NAME: mcp-server-alarm-management
+        MODULE_PATH: mcp_servers.alarm_management
     container_name: mcp-server
     depends_on:
       alarm-api:
@@ -45,7 +42,7 @@ services:
     build:
       context: .
       args:
-        SERVICE_NAME: apps-backend
+        MODULE_PATH: apps.backend
     container_name: copilot-backend
     depends_on:
       mcp-server:
@@ -65,7 +62,7 @@ services:
     build:
       context: .
       args:
-        SERVICE_NAME: apps-frontend
+        MODULE_PATH: apps.frontend
     container_name: frontend
     depends_on:
       copilot-backend:
@@ -92,7 +89,9 @@ services:
     ports:
       - "${VECTOR_STORE_PORT:-8002}:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"]
+      # Chroma 0.5+ deprecated the v1 API; v2 endpoints are reachable
+      # at /api/v2/*. Discovery above confirmed /api/v2/heartbeat = 200.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v2/heartbeat || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -101,7 +100,7 @@ services:
     build:
       context: .
       args:
-        SERVICE_NAME: connectors
+        MODULE_PATH: connectors
     container_name: ticket-mock
     env_file:
       - path: .env
@@ -109,7 +108,7 @@ services:
     ports:
       - "${TICKETING_API_PORT:-8003}:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 10s
       timeout: 3s
       retries: 5
