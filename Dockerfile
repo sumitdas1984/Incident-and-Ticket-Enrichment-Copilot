@@ -35,6 +35,7 @@ RUN uv sync --frozen --no-install-project --no-group dev
 
 # Copy source
 COPY apps/ ./apps/
+COPY core/ ./core/
 COPY mcp-servers/ ./mcp-servers/
 COPY rag/ ./rag/
 COPY connectors/ ./connectors/
