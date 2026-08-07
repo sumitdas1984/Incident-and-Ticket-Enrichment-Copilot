@@ -21,6 +21,10 @@ class RAGError(CopilotError):
     """Retrieval failed (low confidence, broken index, etc.)."""
 
 
+class LLMError(CopilotError):
+    """LLM provider returned an error or a malformed response."""""
+
+
 class TicketApprovalRequired(CopilotError):  # noqa: N818 -- not an "Error" in the conventional sense, it's a control-flow signal
     """Write operation attempted without explicit user approval."""
 
