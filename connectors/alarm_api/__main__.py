@@ -1,24 +1,28 @@
-"""Placeholder Alarm Management API simulator; real implementation lands in Epic 2."""
+"""Entry point: run the alarm-api simulator via uvicorn.
+
+Real implementation for Feature 2.1. Wires core.config + core.logging
+through the FastAPI app and binds the container port directly
+(settings.alarm_api_port is the host port, not the container port).
+"""
 import uvicorn
-from fastapi import FastAPI
 
 from core.config import get_settings
-from core.logging import bind_context, configure_logging, get_logger
+from core.logging import configure_logging, get_logger
+
+from .app import create_app
 
 settings = get_settings()
 configure_logging(settings.log_level)
 log = get_logger(__name__)
 
-bind_context(service="alarm-api")
-
-app = FastAPI(title="alarm-api (placeholder)")
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "alarm-api"}
+app = create_app()
 
 
 if __name__ == "__main__":
-    log.info("starting", component="alarm-api", port=settings.alarm_api_port)
-    uvicorn.run(app, host="0.0.0.0", port=settings.alarm_api_port)
+    # The container port is fixed by docker-compose.yml (the second
+    # number in the 'ports:' mapping). settings.alarm_api_port is the
+    # HOST port and is for client code that needs to reach this
+    # service over the host network.
+    container_port = 8000
+    log.info("starting", component="alarm-api", port=container_port)
+    uvicorn.run(app, host="0.0.0.0", port=container_port)
