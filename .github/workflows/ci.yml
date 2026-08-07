@@ -12,7 +12,16 @@ jobs:
           cache-dependency-glob: "uv.lock"
       - run: uv sync
       - run: uv run ruff check .
-      - run: uv run mypy apps rag connectors
+      - run: uv run mypy apps rag connectors core
+      - name: Disallow os.getenv outside core/
+        # Per Feature 1.2's contract, configuration is loaded once via
+        # core.config.get_settings(). Anywhere else is a layering
+        # violation.
+        run: |
+          if grep -rn 'os\.getenv' apps/ mcp-servers/ rag/ connectors/ tests/ 2>/dev/null; then
+            echo "os.getenv is only allowed inside core/config.py" >&2
+            exit 1
+          fi
       - name: Run pytest (treat "no tests collected" as success)
         # Pytest exits with code 5 when it finds zero tests. Treat that as
         # a green CI run (Feature 1.1 is scaffolding only; real tests

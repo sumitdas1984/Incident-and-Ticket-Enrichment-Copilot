@@ -31,7 +31,9 @@ test:
 
 lint:
 	uv run ruff check .
-	uv run mypy apps rag connectors
+	uv run mypy apps rag connectors core
+	@echo "Smoke check: core.config loads without a real .env"
+	uv run python -c "from core.config import get_settings; s = get_settings(); print('Settings OK, alarm_api_base_url=' + s.alarm_api_base_url)"
 
 # Inside-docker variants — useful when reproducing CI parity
 test-docker:
