@@ -12,7 +12,19 @@ jobs:
           cache-dependency-glob: "uv.lock"
       - run: uv sync
       - run: uv run ruff check .
-      - run: uv run mypy apps rag connectors core
+      # ``mypy apps rag connectors core`` invokes mypy with the
+      # four directories as paths. That causes mypy to discover
+      # ``rag/ingestion/__init__.py`` both as a top-level
+      # ``ingestion`` module and as ``rag.ingestion``, producing
+      # ``Source file found twice under different module names``
+      # and aborting the check.
+      #
+      # ``--explicit-package-bases`` tells mypy to map ``rag``
+      # onto the ``rag`` package and ``connectors`` / ``core``
+      # onto themselves; ``apps`` is treated as a path because
+      # its sub-packages (``backend`` / ``frontend``) are
+      # discoverable without an ``apps/__init__.py``.
+      - run: uv run mypy --explicit-package-bases apps rag connectors core
       - name: Disallow os.getenv outside core/
         # Per Feature 1.2's contract, configuration is loaded once via
         # core.config.get_settings(). Anywhere else is a layering
