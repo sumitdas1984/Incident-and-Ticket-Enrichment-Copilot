@@ -77,6 +77,33 @@ class AlarmListResponse(BaseModel):
     total: int
 
 
+class TicketSummary(BaseModel):
+    """A past ticket surfaced by ``GET /tickets/similar``.
+
+    The simulator returns a small static list seeded in
+    :file:`connectors/alarm_api/seed.py`. The fields mirror what
+    a real ticket-management system would expose at the
+    read-only surface the orchestrator consumes.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    title: str
+    status: Literal["open", "in_progress", "resolved", "closed"] = "resolved"
+    asset_id: str | None = None
+    site: str | None = None
+    asset_class: str | None = None
+    similarity: float = Field(ge=0.0, le=1.0)
+    closed_at: datetime | None = None
+    resolution_excerpt: str
+
+
+class TicketListResponse(BaseModel):
+    items: list[TicketSummary]
+    total: int
+
+
 class TimeRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     start_time: datetime

@@ -180,3 +180,16 @@ def test_brief_e2e_scenario(acceptance_client: TestClient) -> None:
     # The answer carries the intent and the RAG confidence band.
     assert "Intent" in body["answer"]
     assert "Confidence" in body["answer"]
+
+    # Feature 5.2 — structured Incident payload.
+    assert body["incident"] is not None
+    inc = body["incident"]
+    assert inc["id"]
+    assert inc["title"]
+    assert inc["summary"]
+    assert inc["severity"] in {"low", "medium", "high", "critical"}
+    assert inc["created_at"]
+    # Citations propagate into the Incident.
+    assert len(inc["citations"]) == len(body["citations"])
+    # similar_tickets is present (empty list when no MCP server).
+    assert isinstance(inc["similar_tickets"], list)

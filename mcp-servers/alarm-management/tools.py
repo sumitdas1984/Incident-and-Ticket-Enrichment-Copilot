@@ -1,12 +1,13 @@
-"""Alarm Management MCP tools (Stories 3.2.1 – 3.2.4).
+"""Alarm Management MCP tools (Stories 3.2.1 – 3.2.4 + 5.2.1).
 
-Four tools, all flat-kwargs shape (per Feature 3.1's
+Five tools, all flat-kwargs shape (per Feature 3.1's
 ``@register_tool`` design):
 
 * ``search_assets`` — Story 3.2.1 — ``GET /assets/search``
 * ``get_alarm`` — Story 3.2.2 — ``GET /alarms/{alarm_id}``
 * ``summarize_alarms`` — Story 3.2.3 — ``GET /alarms`` (paginated)
 * ``recommend_actions`` — Story 3.2.4 — ``POST /recommendations/operator-actions``
+* ``search_similar_tickets`` — Story 5.2.1 — ``GET /tickets/similar``
 
 Why each tool is a thin wrapper, not business logic
 --------------------------------------------------
@@ -73,7 +74,7 @@ def get_alarm_api_client(server: Any) -> AlarmApiClient:
 
 
 def register_tools(server: Any) -> None:
-    """Register all four Alarm Management tools on ``server``.
+    """Register all five Alarm Management tools on ``server``.
 
     Called once from ``__main__.py`` at startup. Idempotent only
     in the sense that registering twice will produce duplicate
@@ -222,3 +223,45 @@ def register_tools(server: Any) -> None:
                 "include_historical_pattern": True,
             },
         )
+
+    @register_tool(
+        server,
+        name="search_similar_tickets",
+        description=(
+            "Search past tickets that match a free-form query. "
+            "Returns a list of ticket summaries with id, title, "
+            "status, similarity score, and resolution excerpt. "
+            "Optional site and asset_class filters narrow the "
+            "search. Used by the orchestrator's chain to ground "
+            "the incident draft in prior incident history."
+        ),
+    )
+    async def search_similar_tickets(
+        text: str = Field(
+            ...,
+            min_length=1,
+            max_length=500,
+            description="Free-form query text (e.g. 'boiler tube leak').",
+        ),
+        site: str | None = Field(
+            default=None,
+            description="Optional site code filter.",
+        ),
+        asset_class: str | None = Field(
+            default=None,
+            description="Optional asset class filter (e.g. 'boiler').",
+        ),
+        limit: int = Field(
+            default=5,
+            ge=1,
+            le=20,
+            description="Maximum number of tickets to return (1-20).",
+        ),
+    ) -> dict[str, Any]:
+        client = get_alarm_api_client(server)
+        params: dict[str, Any] = {"text": text, "limit": limit}
+        if site is not None:
+            params["site"] = site
+        if asset_class is not None:
+            params["asset_class"] = asset_class
+        return await client.get_json("/tickets/similar", params=params)

@@ -37,6 +37,7 @@ class PlanStepKind(StrEnum):
 
     TOOL_CALL = "tool_call"
     RAG_QUERY = "rag_query"
+    SEARCH_SIMILAR_TICKETS = "search_similar_tickets"
     COMPOSE = "compose"
 
 
@@ -65,6 +66,25 @@ class RagQueryPayload(BaseModel):
     filters: RetrievalFilters | None = None
 
 
+class SimilarTicketsPayload(BaseModel):
+    """Search the alarm-api for past tickets matching the query.
+
+    The handler invokes the alarm-management MCP server's
+    ``search_similar_tickets`` tool. The result is a list of
+    ticket summaries (id, title, status, similarity, resolution
+    excerpt) that the incident builder threads into the
+    ``Incident.similar_tickets`` field.
+    """
+
+    model_config = _BASE_PLAN_CONFIG
+
+    kind: Literal[PlanStepKind.SEARCH_SIMILAR_TICKETS] = PlanStepKind.SEARCH_SIMILAR_TICKETS
+    text: str
+    site: str | None = None
+    asset_class: str | None = None
+    limit: int = 5
+
+
 class ComposePayload(BaseModel):
     """Assemble the final answer from the prior step outputs."""
 
@@ -83,7 +103,7 @@ class PlanStep(BaseModel):
 
     step_id: str
     kind: PlanStepKind
-    payload: ToolCallPayload | RagQueryPayload | ComposePayload = Field(
+    payload: ToolCallPayload | RagQueryPayload | SimilarTicketsPayload | ComposePayload = Field(  # noqa: E501
         discriminator="kind",
     )
     depends_on: list[str] = Field(default_factory=list)
@@ -116,5 +136,6 @@ __all__ = [
     "PlanStep",
     "PlanStepKind",
     "RagQueryPayload",
+    "SimilarTicketsPayload",
     "ToolCallPayload",
 ]

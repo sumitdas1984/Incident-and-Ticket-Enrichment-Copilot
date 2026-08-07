@@ -40,6 +40,7 @@ from .plan import (
     PlanStep,
     PlanStepKind,
     RagQueryPayload,
+    SimilarTicketsPayload,
     ToolCallPayload,
 )
 from .rag_step import RagStepExecutor
@@ -77,6 +78,7 @@ class ChainResult:
     rag_confidence: str = "none"
     dropped_count: int = 0
     prior_outputs: dict[str, Any] = field(default_factory=dict)
+    similar_tickets: list[dict[str, Any]] = field(default_factory=list)
 
 
 class ChainRunner:
@@ -99,6 +101,7 @@ class ChainRunner:
         citations: list[Citation] = []
         rag_confidence = "none"
         dropped_count = 0
+        similar_tickets: list[dict[str, Any]] = []
 
         for wave in waves:
             for step in wave:
@@ -106,21 +109,39 @@ class ChainRunner:
                     payload = step.payload
                     if not isinstance(payload, ToolCallPayload):
                         raise ChainError(f"step {step.step_id} kind=tool_call but payload is {type(payload).__name__}")
-                    try:
-                        output, ts = await self._mcp.call(
-                            tool=payload.tool, args=payload.args,
+                    output, ts = await self._call_mcp(
+                        step_id=step.step_id,
+                        tool=payload.tool,
+                        args=payload.args,
+                        server=payload.server,
+                    )
+                    prior_outputs[step.step_id] = output
+                    trace.append(ts)
+                elif step.kind == PlanStepKind.SEARCH_SIMILAR_TICKETS:
+                    payload = step.payload
+                    if not isinstance(payload, SimilarTicketsPayload):
+                        raise ChainError(
+                            f"step {step.step_id} kind=search_similar_tickets "
+                            f"but payload is {type(payload).__name__}"
                         )
-                    except Exception as exc:  # noqa: BLE001 — surface partial failure as trace step
-                        output = None
-                        ts = TraceStep(
-                            server=payload.server,
-                            tool=payload.tool,
-                            args=payload.args,
-                            output=None,
-                            duration_ms=0,
-                            outcome="error",
-                            error=str(exc),
-                        )
+                    args = {
+                        "text": payload.text,
+                        "limit": payload.limit,
+                    }
+                    if payload.site is not None:
+                        args["site"] = payload.site
+                    if payload.asset_class is not None:
+                        args["asset_class"] = payload.asset_class
+                    output, ts = await self._call_mcp(
+                        step_id=step.step_id,
+                        tool="search_similar_tickets",
+                        args=args,
+                        server="alarm-management",
+                    )
+                    if output is not None and isinstance(output, dict):
+                        items = output.get("items") or []
+                        if isinstance(items, list):
+                            similar_tickets = list(items)
                     prior_outputs[step.step_id] = output
                     trace.append(ts)
                 elif step.kind == PlanStepKind.RAG_QUERY:
@@ -168,7 +189,31 @@ class ChainRunner:
             rag_confidence=rag_confidence,
             dropped_count=dropped_count,
             prior_outputs=prior_outputs,
+            similar_tickets=similar_tickets,
         )
+
+    async def _call_mcp(
+        self, *, step_id: str, tool: str, args: dict[str, Any], server: str,
+    ) -> tuple[Any, TraceStep]:
+        """Call the MCP tool and surface partial failure as a trace step.
+
+        Both :class:`ToolCallPayload` and :class:`SimilarTicketsPayload`
+        steps dispatch through this helper. A failure produces a
+        ``TraceStep(outcome="error")`` and an ``output=None``; the
+        chain runner checks ``output is None`` and continues.
+        """
+        try:
+            return await self._mcp.call(tool=tool, args=args)
+        except Exception as exc:  # noqa: BLE001 — surface partial failure as trace step
+            return None, TraceStep(
+                server=server,
+                tool=tool,
+                args=args,
+                output=None,
+                duration_ms=0,
+                outcome="error",
+                error=str(exc),
+            )
 
     def _execute_rag_with_filters(
         self, *, query: str, k: int, filters: RetrievalFilters,

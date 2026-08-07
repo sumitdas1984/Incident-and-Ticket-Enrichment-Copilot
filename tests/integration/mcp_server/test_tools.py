@@ -387,7 +387,7 @@ def test_recommend_actions_404_becomes_alarm_not_found_error() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_all_four_tools_are_listed() -> None:
+def test_all_five_tools_are_listed() -> None:
     """`tools/list` (via the SDK's tool_manager) contains every Alarm tool."""
 
     def _ok(req: httpx.Request) -> httpx.Response:
@@ -395,7 +395,13 @@ def test_all_four_tools_are_listed() -> None:
 
     server, _ = _make_server_with_mock(_ok)
     tool_names = {t.name for t in server._tool_manager.list_tools()}
-    assert tool_names == {"search_assets", "get_alarm", "summarize_alarms", "recommend_actions"}
+    assert tool_names == {
+        "search_assets",
+        "get_alarm",
+        "summarize_alarms",
+        "recommend_actions",
+        "search_similar_tickets",
+    }
 
 
 def test_get_alarm_api_client_raises_when_lifespan_not_run() -> None:
