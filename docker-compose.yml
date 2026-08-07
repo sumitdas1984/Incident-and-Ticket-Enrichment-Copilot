@@ -7,7 +7,12 @@ services:
       args:
         SERVICE_NAME: alarm-api-simulator
     container_name: alarm-api
-    env_file: .env
+    # required: false so 'docker compose config' and 'docker compose up'
+    # work from a clean clone before the user has copied .env.example to
+    # .env. Placeholder services don't actually consume these vars.
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${ALARM_API_PORT:-8000}:8000"
     healthcheck:
@@ -25,7 +30,9 @@ services:
     depends_on:
       alarm-api:
         condition: service_healthy
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${MCP_SERVER_PORT:-9000}:9000"
     healthcheck:
@@ -43,7 +50,9 @@ services:
     depends_on:
       mcp-server:
         condition: service_healthy
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${BACKEND_PORT:-8001}:8000"
     healthcheck:
@@ -61,7 +70,9 @@ services:
     depends_on:
       copilot-backend:
         condition: service_healthy
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     healthcheck:
@@ -73,7 +84,9 @@ services:
   vector-store:
     image: chromadb/chroma:latest
     container_name: vector-store
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./.chroma:/chroma/chroma
     ports:
@@ -90,7 +103,9 @@ services:
       args:
         SERVICE_NAME: connectors
     container_name: ticket-mock
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${TICKETING_API_PORT:-8003}:8000"
     healthcheck:
