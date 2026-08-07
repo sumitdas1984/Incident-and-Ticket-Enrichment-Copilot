@@ -128,7 +128,50 @@ embedder's name and refuse to query if they differ. The
 :class:`~rag.ingestion.InMemoryVectorIndex` already exposes
 the metadata field.
 
-## 8. Mock LLM client emits a minimal plan
+## 8. Static seeded ticket list (Feature 5.2)
+
+The alarm-api's ``/tickets/similar`` endpoint
+(:file:`connectors/alarm_api/routers/tickets.py`) returns a
+small static list seeded in :file:`connectors/alarm_api/seed.py`.
+Five entries cover the four asset classes in the corpus
+(``boiler``, ``compressor``, ``cooling_water``, ``site``).
+
+**Why documented:** a real ticket-similarity index requires an
+embedding model and a vector store — both already present in
+the project, but wiring them up adds latency and complexity
+the demo path does not need. The seeded list has pre-baked
+``similarity`` scores so the orchestrator's top-N filter is
+deterministic.
+
+**What it would take to lift:** store the seed list in a
+proper table (e.g. a SQLite-backed ``tickets`` table populated
+on alarm-api startup), expose a vector-store-backed similarity
+search, and add a `/tickets` admin endpoint for ticket
+lifecycle management. The seeded list is the 1.0 placeholder.
+
+## 9. Template-based Incident projection (Feature 5.2)
+
+The :class:`~apps.backend.orchestrator.incident.build_incident`
+function projects the chain's outputs into a typed
+:class:`~core.domain.Incident` payload via template projection
+(no LLM call). Title, summary, likely_cause, recommended_actions,
+citations, and similar_tickets are derived from the chain's
+trace, citations, and tool outputs.
+
+**Why documented:** the brief's workflow step 6 ("prepare a
+structured incident draft") is a projection of data the
+orchestrator already has. The LLM does not invent any new
+information — it would only rephrase what's already in the
+chain's outputs. Template projection is deterministic, fast,
+and auditable.
+
+**What it would take to lift:** pass an :class:`LLMClient` to
+the IncidentBuilder and override the ``title`` / ``summary`` /
+``likely_cause`` fields with an LLM-driven rewrite. The
+template projection stays as the fallback when the LLM client
+is ``MockLLMClient``.
+
+## 10. Mock LLM client emits a minimal plan
 
 The :class:`~apps.backend.orchestrator.llm_client.MockLLMClient`
 emits a one-RAG-step + compose plan. The chain runner

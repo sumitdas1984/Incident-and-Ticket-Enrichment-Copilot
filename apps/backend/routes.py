@@ -13,6 +13,7 @@ from core.exceptions import CopilotError, MCPError, RAGError
 from core.logging import bind_context, clear_context, get_logger
 
 from .orchestrator.errors import PlannerError
+from .orchestrator.incident import IncidentContext, build_incident
 from .orchestrator.request import ChatRequest, ChatResponse, ConversationMessage
 
 log = get_logger(__name__)
@@ -59,6 +60,15 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 
         result = await bundle.chain.run(plan)
 
+        incident = build_incident(
+            IncidentContext(
+                intent=result.intent,
+                request=req.message,
+                plan=plan,
+                chain_result=result,
+            )
+        )
+
         bundle.conversation_store.append(
             history.id,
             ConversationMessage(role="user", content=req.message),
@@ -76,6 +86,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             rag_confidence=result.rag_confidence,
             dropped_count=result.dropped_count,
             intent=result.intent,
+            incident=incident,
             raw_payload={
                 "plan_id": plan.plan_id,
                 "step_count": len(plan.steps),

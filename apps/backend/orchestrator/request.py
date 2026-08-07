@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.domain import Citation, TraceStep
+from core.domain import Citation, Incident, TraceStep
 
 
 class ConversationMessage(BaseModel):
@@ -75,6 +75,7 @@ class ChatResponse(BaseModel):
     dropped_count: int = 0
     intent: str = ""
     raw_payload: dict[str, Any] = Field(default_factory=dict)
+    incident: Incident | None = None
 
 
 __all__ = [

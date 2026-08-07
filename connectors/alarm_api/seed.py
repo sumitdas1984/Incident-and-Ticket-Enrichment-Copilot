@@ -7,6 +7,7 @@ land on the same ids every time the simulator boots.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from core.domain import Alarm, Asset, Severity
 
@@ -166,4 +167,90 @@ SEED_ALARMS: list[Alarm] = [
         raised_at=datetime(2026, 6, 21, 15, 0, tzinfo=UTC),
         acknowledged=True,
     ),
+]
+
+
+# Synthetic past tickets seeded for the ``/tickets/similar`` endpoint.
+# The list is small (5 entries) — the brief requires "similar tickets"
+# as a workflow step, but the simulator's contract is "give back
+# plausible matches" not "implement a real similarity index". The
+# 5 entries cover the four asset classes in the corpus
+# (`boiler`, `compressor`, `cooling_water`, `compressor`-site-wide)
+# so the orchestrator's `asset_class` filter has something to match.
+#
+# The `similarity` field is pre-baked so the response is
+# deterministic regardless of which text the orchestrator sends.
+# The orchestrator picks the top-N by the seed's `similarity` value.
+SEED_TICKETS: list[dict[str, Any]] = [
+    {
+        "id": "TKT-1042",
+        "title": "Boiler Feed Pump 101 — high temperature trip",
+        "status": "resolved",
+        "asset_id": "asset-bfp-101",
+        "site": "EastRefinery",
+        "asset_class": "boiler",
+        "similarity": 0.86,
+        "closed_at": datetime(2026, 3, 14, 16, 0, tzinfo=UTC),
+        "resolution_excerpt": (
+            "Replaced the bearing assembly and aligned the suction "
+            "casing. Temperature returned to baseline within 4 hours; "
+            "no recurrence in 60 days."
+        ),
+    },
+    {
+        "id": "TKT-1108",
+        "title": "Boiler Feed Pump 101 — recurring low flow",
+        "status": "resolved",
+        "asset_id": "asset-bfp-101",
+        "site": "EastRefinery",
+        "asset_class": "boiler",
+        "similarity": 0.79,
+        "closed_at": datetime(2026, 5, 2, 11, 0, tzinfo=UTC),
+        "resolution_excerpt": (
+            "Blocked suction strainer. Cleaned, verified flow "
+            "recovery, scheduled next inspection in 90 days."
+        ),
+    },
+    {
+        "id": "TKT-1231",
+        "title": "Compressor C1 — surge recovery",
+        "status": "resolved",
+        "asset_id": "asset-comp-c1",
+        "site": "NorthPlant",
+        "asset_class": "compressor",
+        "similarity": 0.71,
+        "closed_at": datetime(2026, 4, 19, 9, 30, tzinfo=UTC),
+        "resolution_excerpt": (
+            "Recalibrated the antisurge valve. Documented in the "
+            "compressor surge recovery SOP."
+        ),
+    },
+    {
+        "id": "TKT-1349",
+        "title": "Cooling water pump 3 — bearing failure",
+        "status": "in_progress",
+        "asset_id": None,
+        "site": "WestRefinery",
+        "asset_class": "cooling_water",
+        "similarity": 0.62,
+        "closed_at": None,
+        "resolution_excerpt": (
+            "Bearing replacement in progress; spare ordered. ETA to "
+            "close: 5 days."
+        ),
+    },
+    {
+        "id": "TKT-1410",
+        "title": "High-severity alarm escalation — site-wide",
+        "status": "resolved",
+        "asset_id": None,
+        "site": "EastRefinery",
+        "asset_class": "site",
+        "similarity": 0.55,
+        "closed_at": datetime(2026, 2, 28, 14, 0, tzinfo=UTC),
+        "resolution_excerpt": (
+            "On-call rota engaged within 5 minutes; root cause was a "
+            "tripped breaker. No asset damage."
+        ),
+    },
 ]

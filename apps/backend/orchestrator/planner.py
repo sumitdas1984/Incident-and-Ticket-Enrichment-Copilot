@@ -35,6 +35,7 @@ from .plan import (
     PlanStep,
     PlanStepKind,
     RagQueryPayload,
+    SimilarTicketsPayload,
     ToolCallPayload,
 )
 from .request import ConversationMessage, ToolCatalogEntry
@@ -231,6 +232,37 @@ class MockPlanner:
                 payload=RagQueryPayload(query=rag_query, k=5, filters=rag_filters),
             )
         )
+
+        # Workflow step 4 (brief § 4): search past tickets. Emitted
+        # when the chain has an alarm context (asset_id or site).
+        # The chain recovers gracefully if the step returns no
+        # tickets — the IncidentBuilder treats an empty list as a
+        # valid "no close matches" outcome.
+        if "asset_id" in slots or "site" in slots:
+            tickets_args: dict[str, Any] = {
+                "text": request,
+                "limit": 5,
+            }
+            if "site" in slots:
+                tickets_args["site"] = slots["site"]
+            if "asset_class" in slots:
+                tickets_args["asset_class"] = slots["asset_class"]
+            elif "asset_id" in slots:
+                # Derive asset_class from the asset id when the
+                # caller didn't pass it explicitly (mirrors the
+                # RAG filter heuristic above).
+                asset_lower = slots["asset_id"].lower()
+                for asset_class in ("boiler", "compressor", "cooling_water", "distillation_column"):
+                    if asset_class in asset_lower:
+                        tickets_args["asset_class"] = asset_class
+                        break
+            steps.append(
+                PlanStep(
+                    step_id=_next_id(),
+                    kind=PlanStepKind.SEARCH_SIMILAR_TICKETS,
+                    payload=SimilarTicketsPayload(**tickets_args),
+                )
+            )
 
         steps.append(
             PlanStep(

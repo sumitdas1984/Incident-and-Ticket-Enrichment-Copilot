@@ -7,7 +7,7 @@ from core.config import get_settings
 from core.logging import bind_context, configure_logging
 
 from .errors import install_handlers
-from .routers import alarms, analytics, assets, calculations, health, recommendations
+from .routers import alarms, analytics, assets, calculations, health, recommendations, tickets
 from .store import AlarmStore
 
 
@@ -33,4 +33,5 @@ def create_app() -> FastAPI:
     app.include_router(recommendations.router)
     app.include_router(calculations.router)
     app.include_router(analytics.router)
+    app.include_router(tickets.router)
     return app
