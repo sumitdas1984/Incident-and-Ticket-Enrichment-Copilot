@@ -1,11 +1,14 @@
-"""Placeholder backend; real implementation lands in Epic 5.
+"""Copilot backend entry point.
 
-Smoke-tests the core/ package: settings load, logger configures,
-JSON line emitted at startup.
+Run via ``python -m apps.backend`` or via the docker-compose
+service. The FastAPI app is built by :func:`apps.backend.create_app`,
+which wires the orchestration layer onto ``app.state``.
 """
-import uvicorn
-from fastapi import FastAPI
+from __future__ import annotations
 
+import uvicorn
+
+from apps.backend import create_app
 from core.config import get_settings
 from core.logging import bind_context, configure_logging, get_logger
 
@@ -15,12 +18,7 @@ log = get_logger(__name__)
 
 bind_context(service="copilot-backend", mcp_server="alarm-management")
 
-app = FastAPI(title="copilot-backend (placeholder)")
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "copilot-backend"}
+app = create_app()
 
 
 if __name__ == "__main__":

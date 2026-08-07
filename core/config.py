@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     # --- LLM (Epic 5) ---
     llm_provider: Literal["openai", "anthropic", "mock"] = "mock"
     llm_api_key: SecretStr = SecretStr("replace-me")
+    # Model name passed to the configured provider. OpenAI default is
+    # the cheapest capable model; Anthropic default is Claude Haiku.
+    llm_model: str = "gpt-4o-mini"
+    # Planner provider (Story 5.1.1). The "mock" planner is a
+    # general NL-to-slots extractor that produces the same plan
+    # shape as the LLM-driven planner; useful for the demo path
+    # without an API key. The "llm" planner invokes the configured
+    # LLM provider.
+    planner_provider: Literal["mock", "llm"] = "mock"
+    # Path to the persisted RAG index (Feature 4.1 artefact).
+    index_path: str = "./var/index/v1.pkl"
 
     # --- Vector store (Epic 4) ---
     vector_store_url: str = "http://localhost:8002"
