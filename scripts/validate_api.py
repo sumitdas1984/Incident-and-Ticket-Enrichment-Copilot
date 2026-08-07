@@ -62,7 +62,7 @@ def build_newman_argv(
 
 def run_newman(argv: Sequence[str]) -> int:
     """Run a single Newman invocation, streaming stdout/stderr. Returns the exit code."""
-    print(f"\n-> {' '.join(argv[:6])} ...\n", flush=True)
+    print(f"\n--> {' '.join(argv[:6])} ...\n", flush=True)
     # On Windows, .cmd / .bat shims require either shell=True or a
     # proper cmd.exe subprocess. shell=True with a list is unsafe (the
     # arg-joining rules vary), so we route through cmd.exe explicitly.
