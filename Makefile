@@ -69,7 +69,7 @@ validate-api-only:
 		--report-dir newman-report
 
 ingest:
-	@echo "Placeholder -- wired in Story 4.1.2 once RAG lands."
+	uv run python -m rag.ingestion --corpus rag/documents --index var/index/v1.pkl
 
 run-alarm-api:
 	@ALARM_API_TOKEN=$${ALARM_API_TOKEN:-demo-token} uv run python -m connectors.alarm_api

@@ -26,6 +26,24 @@ dependencies = [
     # unchanged because the policy wraps ``get_json`` /
     # ``post_json`` internally.
     "tenacity>=8.2",
+    # Embedding model for RAG ingestion (Feature 4.1). Pinned to a
+    # small, CPU-friendly model so the corpus can be ingested in a
+    # clean container without GPU / cloud credentials. The library
+    # pulls the actual weights on first use; the CLI defaults to a
+    # deterministic embedder so a fresh checkout ingests without
+    # any network access.
+    "sentence-transformers>=3.0",
+    # ``torch`` is a transitive dep of sentence-transformers;
+    # declaring it explicitly so the lock file pins a known-good
+    # version per platform. The deterministic embedder path
+    # never imports torch, so the cost is paid only when the
+    # real model is wired in.
+    "torch>=2.1",
+    # PyYAML for the front-matter parser in the RAG loader.
+    # ``python-frontmatter`` would also work, but the front-matter
+    # grammar is small enough that a hand-rolled YAML reader
+    # keeps the dep footprint down.
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -70,6 +88,7 @@ pythonpath = ["."]
 markers = [
     "integration: requires running docker-compose stack",
     "e2e: full end-to-end scenario, slow",
+    "slow_embeddings: requires the real sentence-transformers model (downloads weights on first run)",
 ]
 
 [tool.ruff]

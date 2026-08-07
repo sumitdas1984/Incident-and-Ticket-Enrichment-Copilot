@@ -36,3 +36,8 @@ Thumbs.db
 # not part of the repo.
 node_modules/
 newman-report/
+
+# RAG vector index (Story 4.1.2). The pipeline writes
+# ``var/index/v1.pkl``; the artefact is reproducible from
+# ``make ingest`` and is not part of the repo.
+var/
