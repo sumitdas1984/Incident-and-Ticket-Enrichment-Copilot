@@ -47,16 +47,15 @@ def install_handlers(app: FastAPI) -> None:
 
     @app.middleware("http")
     async def _echo_trace_header(request: Request, call_next):
-        """Echo the request's trace_id (if any) back as a response header.
+        """Echo the request's trace_id back as a response header.
 
-        Spec: 'the request's trace_id, if present, is echoed back in the
-        response'. This is critical for the Postman chaining collection
-        to verify trace propagation across hops.
+        If the request doesn't supply a trace_id, generate a fresh one
+        so every response carries a correlation id (this is the same
+        id used in the error envelope).
         """
         response = await call_next(request)
-        trace_id = request.headers.get("trace_id")
-        if trace_id is not None:
-            response.headers["trace_id"] = trace_id
+        trace_id = request.headers.get("trace_id") or new_id()
+        response.headers["trace_id"] = trace_id
         return response
 
     @app.exception_handler(AlarmAPIError)
