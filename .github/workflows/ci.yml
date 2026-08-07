@@ -5,10 +5,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.13"
-      - run: pip install -e ".[dev]"
-      - run: ruff check .
-      - run: mypy apps mcp_servers rag connectors
-      - run: pytest -ra
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run mypy apps rag connectors
+      - run: uv run pytest -ra
