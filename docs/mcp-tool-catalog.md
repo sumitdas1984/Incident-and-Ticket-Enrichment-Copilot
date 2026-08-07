@@ -545,10 +545,86 @@ These apply to all four tools, not just one:
    reused across every tool call so connections are pooled. It is
    closed on server shutdown.
 
-5. **No retries, no streaming.** Both are explicitly out of scope
-   here. Retries land in Feature 3.3 (MCP Reliability); they wrap
-   `AlarmApiClient.get_json` / `post_json` without touching the
-   four tool handlers.
+5. **Retries with bounded exponential back-off + jitter.** A single
+   `RetryPolicy` is shared across all four tools. Defaults: 3
+   attempts (initial + 2 retries) with waits between attempts
+   roughly `0.25 s, 0.5 s, ...` capped at `2 s` plus ±10 % jitter.
+   See the **Retry and timeout behaviour** section below for the
+   exact retryable-status set and worst-case tail latency.
+
+6. **No streaming.** Streaming responses are out of scope here.
+   All four alarm-api endpoints are request/response. Feature 3.5
+   (advanced ops) may revisit.
+
+---
+
+## Retry and timeout behaviour
+
+Implemented in [`mcp-servers/alarm-management/retry.py`](../mcp-servers/alarm-management/retry.py) (Feature 3.3 — Story 3.3.1). The four tool handlers are unchanged; the policy wraps `AlarmApiClient.get_json` / `post_json` internally.
+
+### Defaults
+
+| Field                          | Default | Env var                      |
+|--------------------------------|---------|------------------------------|
+| Per-request timeout (s)        | `5.0`   | `ALARM_API_TIMEOUT_S`        |
+| Max attempts (incl. first)     | `3`     | `ALARM_API_MAX_ATTEMPTS`     |
+| Initial back-off (s)           | `0.25`  | `ALARM_API_INITIAL_BACKOFF_S`|
+| Max back-off (s)               | `2.0`   | `ALARM_API_MAX_BACKOFF_S`    |
+| Jitter (±fraction of back-off) | `0.1`   | (hard-coded)                 |
+
+`ALARM_API_MAX_ATTEMPTS=1` disables retries entirely and restores
+Feature 3.2 behaviour exactly (no change to the four tool
+handlers). Useful for tests and for callers that want
+single-attempt semantics.
+
+### What gets retried
+
+| Condition                                            | Retry? |
+|------------------------------------------------------|--------|
+| 5xx response (`500`, `502`, `503`, `504`)            | yes    |
+| `408 Request Timeout`                                | yes    |
+| `425 Too Early`                                      | yes    |
+| `429 Too Many Requests`                              | yes    |
+| `httpx.ConnectError`                                 | yes    |
+| `httpx.ReadTimeout` / `httpx.WriteTimeout`           | yes    |
+| `httpx.PoolTimeout`                                  | yes    |
+| `httpx.RemoteProtocolError`                          | yes    |
+| Any other 4xx (including `404`)                      | no     |
+| `httpx.InvalidURL` / `UnsupportedProtocol` / etc.    | no     |
+
+Set lives in `mcp_servers.alarm_management.retry.RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}`.
+
+### Why 4xx is not retried
+
+A `4xx` is a client mistake — bad input, unknown alarm id,
+unauthorised — and retrying won't change the outcome. We surface
+the envelope immediately (the first `404` becomes `AlarmNotFoundError`;
+any other 4xx becomes `ToolInvocationError`).
+
+### Worst-case tail latency
+
+Per tool call, with default settings:
+
+```
+per-request timeout × max_attempts + sum(back-off)
+= 5 s × 3 + (0.25 + 0.5 + 1.0 + jitter)
+≈ 17 s
+```
+
+The orchestrator's overall timeout must accommodate this when
+chaining multiple tools. The first attempt's response, if
+successful, short-circuits the back-off.
+
+### Observability
+
+Every retry emits a single `alarm_api.retry` log line with
+`attempt`, `max_attempts`, `reason` (status code or exception
+type), `method`, and `path` — no token, no body. On retry
+exhaustion the existing `alarm_api.upstream_error` /
+`alarm_api.transport_error` envelope fires as before, and the
+caller sees the same `ToolInvocationError` ("Upstream Alarm API
+call failed.") — the retry layer is invisible to the protocol
+surface.
 
 ---
 

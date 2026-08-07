@@ -24,6 +24,16 @@ class Settings(BaseSettings):
     alarm_api_base_url: str = "http://localhost:8000"
     alarm_api_token: SecretStr = SecretStr("replace-me")
     alarm_api_port: int = 8000
+    # Per-request timeout (connect/read/write/pool). Feature 3.3 surfaces
+    # this on Settings so an operator can tune tail latency without code
+    # changes.
+    alarm_api_timeout_s: float = 5.0
+    # Retry policy (Feature 3.3 — Story 3.3.1). Defaults: 3 attempts
+    # (initial + 2 retries) with exponential back-off from 0.25 s
+    # capped at 2.0 s and ±10 % jitter.
+    alarm_api_max_attempts: int = 3
+    alarm_api_initial_backoff_s: float = 0.25
+    alarm_api_max_backoff_s: float = 2.0
 
     # --- MCP server (Epic 3) ---
     mcp_server_url: str = "http://localhost:9000"
