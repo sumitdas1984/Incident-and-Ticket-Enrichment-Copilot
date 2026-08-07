@@ -1,7 +1,15 @@
 """Placeholder ticket mock; real ticketing lands in Epic 6."""
-import os
-
+import uvicorn
 from fastapi import FastAPI
+
+from core.config import get_settings
+from core.logging import bind_context, configure_logging, get_logger
+
+settings = get_settings()
+configure_logging(settings.log_level)
+log = get_logger(__name__)
+
+bind_context(service="ticket-mock")
 
 app = FastAPI(title="ticket-mock (placeholder)")
 
@@ -12,8 +20,5 @@ def health() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    # Default to 8000 inside the container; docker-compose.yml maps
-    # the host-side TICKETING_API_PORT (default 8003) onto this.
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    log.info("starting", component="ticket-mock", port=settings.ticketing_api_port)
+    uvicorn.run(app, host="0.0.0.0", port=settings.ticketing_api_port)

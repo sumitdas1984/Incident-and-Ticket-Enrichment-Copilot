@@ -1,7 +1,15 @@
 """Placeholder frontend; real GUI lands in Epic 7."""
-import os
-
+import uvicorn
 from fastapi import FastAPI
+
+from core.config import get_settings
+from core.logging import bind_context, configure_logging, get_logger
+
+settings = get_settings()
+configure_logging(settings.log_level)
+log = get_logger(__name__)
+
+bind_context(service="frontend")
 
 app = FastAPI(title="frontend (placeholder)")
 
@@ -12,6 +20,5 @@ def health() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "5173")))
+    log.info("starting", component="frontend", port=settings.frontend_port)
+    uvicorn.run(app, host="0.0.0.0", port=settings.frontend_port)
