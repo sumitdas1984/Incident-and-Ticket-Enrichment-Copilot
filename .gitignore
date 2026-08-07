@@ -31,3 +31,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Newman (Story 2.2.1) — installed locally by `make validate-api`;
+# not part of the repo.
+node_modules/
+newman-report/
