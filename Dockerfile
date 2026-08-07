@@ -4,9 +4,16 @@
 FROM ghcr.io/astral-sh/uv:0.5.11 AS uv
 
 # ---- Runtime image ----
+# ARGs declared outside any FROM are 'between stages' and get blanked
+# unless re-declared inside the next stage. The :--3.13 fallback
+# covers both cases: --build-arg PYTHON_VERSION=... or default 3.13.
 ARG PYTHON_VERSION=3.13
 
-FROM python:${PYTHON_VERSION}-slim AS base
+FROM python:${PYTHON_VERSION:-3.13}-slim AS base
+
+# Re-declare so any ${PYTHON_VERSION} reference later in this stage
+# resolves correctly under BuildKit's strict scoping rules.
+ARG PYTHON_VERSION
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \

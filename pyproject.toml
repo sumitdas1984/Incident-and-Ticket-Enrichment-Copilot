@@ -90,5 +90,4 @@ dev = [
 [tool.uv]
 package = true
 managed = true
-required-version = ">=0.5.0"
 default-groups = ["dev"]
