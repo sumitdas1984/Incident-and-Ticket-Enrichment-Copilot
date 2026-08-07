@@ -1,7 +1,67 @@
 [project]
 name = "incident-and-ticket-enrichment-copilot"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI copilot that enriches industrial incidents via MCP + RAG."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+license = { text = "MIT" }
+authors = [{ name = "Sumit Das" }]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = [
+    "apps",
+    "apps.backend",
+    "apps.frontend",
+    "mcp_servers",
+    "mcp_servers.alarm_management",
+    "mcp_servers.optional_secondary_server",
+    "rag",
+    "rag.ingestion",
+    "rag.retrieval",
+    "rag.tests",
+    "connectors",
+]
+
+[tool.setuptools.package-dir]
+"mcp_servers" = "mcp-servers"
+"mcp_servers.alarm_management" = "mcp-servers/alarm-management"
+"mcp_servers.optional_secondary_server" = "mcp-servers/optional-secondary-server"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+pythonpath = ["."]
+markers = [
+    "integration: requires running docker-compose stack",
+    "e2e: full end-to-end scenario, slow",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = false
+ignore_missing_imports = true
