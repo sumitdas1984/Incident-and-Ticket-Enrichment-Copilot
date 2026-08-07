@@ -20,6 +20,7 @@ class Asset(BaseModel):
     id: str
     name: str
     site: str
+    unit: str | None = None
     asset_class: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 

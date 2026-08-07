@@ -20,6 +20,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "mypy>=1.10",
+    "httpx2>=0.27",
 ]
 
 [build-system]
@@ -95,6 +96,11 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "mypy>=1.10",
+    # fastapi.testclient -> starlette.testclient requires httpx2 in newer
+    # starlette releases. Without it, `uv run pytest` fails at collection
+    # with: RuntimeError: The starlette.testclient module requires the httpx2
+    # package to be installed.
+    "httpx2>=0.27",
 ]
 
 [tool.uv]

@@ -1,4 +1,4 @@
-.PHONY: help install lock sync build up down test lint validate-api ingest
+.PHONY: help install lock sync build up down test lint validate-api ingest run-alarm-api
 
 help:
 	@echo "Targets: install | lock | sync | build | up | down | test | lint | validate-api | ingest"
@@ -49,3 +49,6 @@ validate-api:
 
 ingest:
 	@echo "Placeholder -- wired in Story 4.1.2 once RAG lands."
+
+run-alarm-api:
+	@ALARM_API_TOKEN=$${ALARM_API_TOKEN:-demo-token} uv run python -m connectors.alarm_api
