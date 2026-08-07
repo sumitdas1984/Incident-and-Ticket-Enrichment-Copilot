@@ -35,17 +35,22 @@ RUN uv sync --frozen --no-install-project --no-group dev
 
 # Copy source
 COPY apps/ ./apps/
+COPY core/ ./core/
 COPY mcp-servers/ ./mcp-servers/
 COPY rag/ ./rag/
 COPY connectors/ ./connectors/
 
 # Install the project itself (no deps -- already resolved above)
-ARG SERVICE_NAME=app
-ENV SERVICE_NAME=${SERVICE_NAME}
+# MODULE_PATH is the dotted Python module path to the service's
+# __main__.py (e.g. 'apps.backend', 'connectors.alarm_api'). It's
+# passed per-service from docker-compose.yml so the same image can
+# serve any role without a dash-to-underscore hack.
+ARG MODULE_PATH=apps.backend
+ENV MODULE_PATH=${MODULE_PATH}
 RUN uv pip install --no-deps .
 
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:${PORT:-8000}/health || exit 1
 
-CMD ["sh", "-c", "exec uv run python -m ${SERVICE_NAME//-/_}.__main__"]
+CMD ["sh", "-c", "exec uv run python -m ${MODULE_PATH}.__main__"]

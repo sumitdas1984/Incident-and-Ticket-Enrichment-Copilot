@@ -10,6 +10,8 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.5",
+    "pydantic>=2.5",
+    "structlog>=24.4",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,7 @@ packages = [
     "apps",
     "apps.backend",
     "apps.frontend",
+    "core",
     "mcp_servers",
     "mcp_servers.alarm_management",
     "mcp_servers.optional_secondary_server",
@@ -79,6 +82,12 @@ ignore_missing_imports = true
 # now. Real code lands in Epic 3, at which point we'll add explicit
 # mypy_path handling.
 exclude = ["mcp-servers/"]
+
+[[tool.mypy.overrides]]
+# structlog uses very dynamic types in its processors; the third-party
+# type stubs are too strict for our usage. Treat as untyped.
+module = "structlog.*"
+ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
