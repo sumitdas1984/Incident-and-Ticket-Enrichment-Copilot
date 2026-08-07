@@ -1,0 +1,114 @@
+name: incident-and-ticket-enrichment-copilot
+
+services:
+  alarm-api:
+    build:
+      context: .
+      args:
+        MODULE_PATH: connectors.alarm_api
+    container_name: alarm-api
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${ALARM_API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      args:
+        MODULE_PATH: mcp_servers.alarm_management
+    container_name: mcp-server
+    depends_on:
+      alarm-api:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${MCP_SERVER_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  copilot-backend:
+    build:
+      context: .
+      args:
+        MODULE_PATH: apps.backend
+    container_name: copilot-backend
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      args:
+        MODULE_PATH: apps.frontend
+    container_name: frontend
+    depends_on:
+      copilot-backend:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  vector-store:
+    image: chromadb/chroma:latest
+    container_name: vector-store
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./.chroma:/chroma/chroma
+    ports:
+      - "${VECTOR_STORE_PORT:-8002}:8000"
+    healthcheck:
+      # Chroma 0.5+ deprecated the v1 API; v2 endpoints are reachable
+      # at /api/v2/*. Discovery above confirmed /api/v2/heartbeat = 200.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v2/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  ticket-mock:
+    build:
+      context: .
+      args:
+        MODULE_PATH: connectors
+    container_name: ticket-mock
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${TICKETING_API_PORT:-8003}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

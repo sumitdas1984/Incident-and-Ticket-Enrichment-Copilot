@@ -1,0 +1,30 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  basic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run mypy apps rag connectors
+      - name: Run pytest (treat "no tests collected" as success)
+        # Pytest exits with code 5 when it finds zero tests. Treat that as
+        # a green CI run (Feature 1.1 is scaffolding only; real tests
+        # land in Epic 8). Every other non-zero exit code propagates
+        # so real test failures still fail the job.
+        run: |
+          set +e
+          uv run pytest -ra
+          EXIT_CODE=$?
+          set -e
+          if [ "$EXIT_CODE" -eq 5 ]; then
+            echo "No tests were collected; treating as success."
+            exit 0
+          fi
+          exit "$EXIT_CODE"
