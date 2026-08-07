@@ -80,6 +80,13 @@ ignore = ["E501"]
 # directory names are filesystem paths, not Python module identifiers,
 # so suppress pep8-naming's N999 there.
 "mcp-servers/**" = ["N999"]
+# `tools.py` uses Pydantic v2's documented `Field(default=None,
+# description=...)` idiom on tool-handler kwargs. B008's "do not
+# perform function call in argument defaults" rule is for mutable
+# defaults; Pydantic Field() returns a sentinel that the framework
+# reads at schema-build time, so the rule doesn't apply. The MCP
+# SDK's flat-kwargs shape depends on Field() being in the signature.
+"mcp-servers/alarm-management/tools.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.13"
