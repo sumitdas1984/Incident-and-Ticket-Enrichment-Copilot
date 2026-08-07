@@ -1,0 +1,100 @@
+name: incident-and-ticket-enrichment-copilot
+
+services:
+  alarm-api:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: alarm-api-simulator
+    container_name: alarm-api
+    env_file: .env
+    ports:
+      - "${ALARM_API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: mcp-server-alarm-management
+    container_name: mcp-server
+    depends_on:
+      alarm-api:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "${MCP_SERVER_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  copilot-backend:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: apps-backend
+    container_name: copilot-backend
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: apps-frontend
+    container_name: frontend
+    depends_on:
+      copilot-backend:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  vector-store:
+    image: chromadb/chroma:latest
+    container_name: vector-store
+    env_file: .env
+    volumes:
+      - ./.chroma:/chroma/chroma
+    ports:
+      - "${VECTOR_STORE_PORT:-8002}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  ticket-mock:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: connectors
+    container_name: ticket-mock
+    env_file: .env
+    ports:
+      - "${TICKETING_API_PORT:-8003}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
