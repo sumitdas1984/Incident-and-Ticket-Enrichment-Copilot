@@ -1,0 +1,1 @@
+"""Optional secondary MCP server package — empty placeholder."""
