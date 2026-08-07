@@ -43,9 +43,30 @@ lint-docker:
 	docker compose run --rm copilot-backend uv run ruff check .
 	docker compose run --rm copilot-backend uv run mypy apps rag connectors
 
-# Stubbed — wired in later epics
+# Story 2.2.1 — boot the Alarm API simulator, run both Postman collections
+# against it via Newman, exit 0 on green. See scripts/validate_api.py.
+#
+# 1. Pick a free port (default 18000 to avoid clashing with other dev services).
+# 2. `npm install` if node_modules is missing (first run).
+# 3. Spawn the simulator in the background, capture its PID.
+# 4. Poll /health until 200.
+# 5. Run the orchestrator against both collections.
+# 6. Kill the simulator on exit (success or failure).
 validate-api:
-	@echo "Placeholder -- wired in Story 2.2.1 once the simulator exists."
+	@command -v node >/dev/null 2>&1 || { echo "Node.js required (>=18). Install from https://nodejs.org"; exit 1; }
+	@if [ ! -d node_modules ]; then echo "→ npm install (first run)"; npm install --no-audit --no-fund; fi
+	@bash scripts/run_validate_api.sh
+
+# Run the orchestrator directly (assumes a simulator is already running on
+# ALARM_API_VALIDATE_PORT). Useful when iterating on the collections without
+# spawning a fresh simulator each time.
+validate-api-only:
+	@uv run python scripts/validate_api.py \
+		--collection postman/chaining/Alarm-API-Chaining.postman_collection.json \
+		--collection postman/scenarios/Alarm-API-Scenarios.postman_collection.json \
+		--base-url http://localhost:$${ALARM_API_VALIDATE_PORT:-18000} \
+		--token $${ALARM_API_TOKEN:-demo-token} \
+		--report-dir newman-report
 
 ingest:
 	@echo "Placeholder -- wired in Story 4.1.2 once RAG lands."
