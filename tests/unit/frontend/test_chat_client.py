@@ -9,8 +9,7 @@ returns a pre-canned response. This is cleaner than the older
 * The transport sees exactly the bytes httpx would send on the
   wire — no FastAPI/Pydantic re-marshalling in between.
 * We can assert directly on the request body, headers, and URL.
-* No ``os.getenv`` / port juggling; ``base_url`` is irrelevant
-  to the transport.
+* No port juggling; ``base_url`` is irrelevant to the transport.
 
 These tests verify Story 7.1.2 acceptance criteria:
 
@@ -397,8 +396,9 @@ def test_client_strips_trailing_slash() -> None:
 def test_default_url_uses_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     """When no ``base_url`` is supplied, the client reads
     ``core.config.get_settings().copilot_backend_url`` — the
-    only place this URL is resolved (CLAUDE.md "no os.getenv
-    outside core/")."""
+    only place this URL is resolved (the project-wide rule that
+    all configuration flows through ``core.config``; see
+    ``CLAUDE.md``)."""
     monkeypatch.setenv("COPILOT_BACKEND_URL", "https://example.test:8000")
     get_settings.cache_clear()
     try:

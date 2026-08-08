@@ -5,7 +5,8 @@ Streamlit UI script (``apps.frontend.ui``) calls
 :meth:`ChatClient.send` on every user message. The client:
 
 * Reads ``COPILOT_BACKEND_URL`` through :func:`core.config.get_settings`
-  (CLAUDE.md "no os.getenv outside core/").
+  (the project-wide rule that all configuration flows through
+  ``core.config``; see ``CLAUDE.md``).
 * Marshals the request body to the same shape the backend's
   ``ChatRequest`` expects (``apps.backend.orchestrator.request.ChatRequest``).
 * Forwards an optional ``x-trace-id`` header so the backend's
@@ -294,7 +295,8 @@ def build_default_client() -> ChatClient:
     """Construct a :class:`ChatClient` from the cached settings.
 
     Convenience for the Streamlit entrypoint — pulls the URL out
-    of the singleton settings (no ``os.getenv`` here).
+    of the singleton settings (the only place this URL is
+    resolved).
     """
     return ChatClient(base_url=get_settings().copilot_backend_url)
 

@@ -20,9 +20,10 @@ Why a launcher, not a programmatic Streamlit bootstrap
   don't want to reimplement.
 
 The launcher reads ``core.config.get_settings().frontend_port``
-(no ``os.getenv`` here — CLAUDE.md) and forwards the standard
-Streamlit server flags so the docker-compose healthcheck can
-reach ``http://localhost:5173/_stcore/health``.
+(all configuration flows through ``core.config`` per ``CLAUDE.md``)
+and forwards the standard Streamlit server flags so the
+docker-compose healthcheck can reach
+``http://localhost:5173/_stcore/health``.
 """
 from __future__ import annotations
 
