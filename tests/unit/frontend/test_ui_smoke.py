@@ -51,6 +51,7 @@ def test_app_boots_and_shows_empty_state() -> None:
     safe = ChatClient(base_url="http://test")
     at = AppTest.from_file(str(_UI_SCRIPT)).run()
     at.session_state["client"] = safe
+    at.session_state["ticket_client"] = safe  # Feature 7.2 workspace column
     at.run()
 
     assert not at.exception
@@ -60,6 +61,9 @@ def test_app_boots_and_shows_empty_state() -> None:
     # The title is the page heading.
     titles = [t.value for t in at.title]
     assert any("Incident Copilot" in t for t in titles)
+    # Feature 7.2 — the workspace column header is present.
+    subheaders = [s.value for s in at.subheader]
+    assert any("Workspace" in s for s in subheaders)
 
 
 def test_submit_message_appends_user_and_assistant_turns() -> None:
