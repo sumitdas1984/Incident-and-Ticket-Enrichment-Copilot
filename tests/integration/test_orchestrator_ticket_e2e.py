@@ -35,7 +35,6 @@ from apps.backend import create_app
 from connectors.ticket_mock.app import create_app as create_ticket_mock_app
 from core.config import get_settings
 
-
 INDEX_PATH = Path("var/index/v1.pkl")
 
 
