@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     ticketing_api_token: SecretStr = SecretStr("replace-me")
     ticketing_mcp_url: str = "http://localhost:9001"
     ticketing_mcp_port: int = 9001
+    # Identity stamped on every approved ticket creation (Feature 6.2).
+    # The brief's hard constraint #3 ("ticket / issue creation is a
+    # write operation; it must require explicit user confirmation in
+    # the GUI") is enforced at the ticket-mock service; the
+    # ``APPROVAL_USER`` env var is the audit-trail attribution. Epic
+    # 7 will derive this from the auth subject instead.
+    approval_user: str = "operator"
 
     # --- App ---
     backend_port: int = 8000

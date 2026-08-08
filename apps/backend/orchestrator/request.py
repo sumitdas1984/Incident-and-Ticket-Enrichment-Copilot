@@ -101,7 +101,10 @@ class TicketDraftResponse(BaseModel):
     Mirrors the ticket-mock's :class:`TicketDraftResponse` shape
     so the wire envelope never has to widen. The
     ``conversation_id`` is the orchestrator's id for this turn
-    (audit trail).
+    (audit trail). The optional ``approval`` block surfaces the
+    Feature 6.2 audit metadata — populated on every persisted
+    ticket, ``None`` on a rejected call (the orchestrator surfaces
+    the 403 envelope via the trace step ``error`` field).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -114,6 +117,7 @@ class TicketDraftResponse(BaseModel):
     labels: list[str] = Field(default_factory=list)
     ticket_id: str | None = None
     preview: bool = True
+    approval: dict[str, Any] | None = None
     trace: list[TraceStep] = Field(default_factory=list)
 
 

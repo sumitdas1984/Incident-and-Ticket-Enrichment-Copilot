@@ -1,14 +1,30 @@
-"""GET /tickets/search and POST /tickets/draft endpoints."""
+"""GET /tickets/search, POST /tickets/draft, and GET /tickets/audit.
+
+Hard constraint #3 from the brief — "ticket / issue creation is
+a write operation; it must require explicit user confirmation
+in the GUI before the MCP server is invoked" — is enforced at
+``POST /tickets/draft``: when ``approved=False`` the endpoint
+returns a structured 403 envelope (no draft, no write, no
+audit row). Successful writes append an :class:`AuditEntry` to
+the in-memory store and surface :class:`TicketApprovalInfo` on
+the response so the GUI can render "approved by … at …".
+"""
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
+from core.config import get_settings
+
 from ..auth import require_bearer
 from ..draft import build_draft
 from ..models import (
+    AuditListResponse,
     Ticket,
+    TicketApprovalInfo,
+    TicketApprovalRequiredError,
     TicketDraftRequest,
     TicketDraftResponse,
     TicketListResponse,
@@ -57,31 +73,59 @@ def search_endpoint(
     return TicketListResponse(items=items, total=len(items))
 
 
+@router.get("/audit", response_model=AuditListResponse)
+def audit_endpoint(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+) -> AuditListResponse:
+    """Return the in-memory audit log (Feature 6.2).
+
+    Bounded by ``limit`` (1..200, default 50). The list is a
+    snapshot — callers should treat it as read-only. The audit
+    log lives in memory; restart of the service clears it. This
+    is documented as a known limitation.
+    """
+    store = _store(request)
+    items = store.list_audit()
+    return AuditListResponse(items=items[:limit], total=len(items))
+
+
 @router.post("/draft", response_model=TicketDraftResponse)
 def draft_endpoint(
     request: Request,
     body: TicketDraftRequest,
 ) -> TicketDraftResponse:
-    """Generate a ticket draft from an incident payload.
+    """Generate (and optionally persist) a ticket draft.
 
-    When ``approved=True``, the draft is persisted and the
-    response carries the assigned ``ticket_id``. When ``False``,
-    the draft is returned in preview mode (no ticket is created).
-    Hard constraint #3 from the brief — "ticket / issue creation
-    is a write operation; it must require explicit user
-    confirmation in the GUI before the MCP server is invoked" —
-    is implemented at the orchestrator layer (Feature 6.2). Here
-    we just honour the flag the caller passes.
+    Hard constraint #3 — ticket creation is a write operation and
+    requires explicit user confirmation in the GUI before the MCP
+    server is invoked. When ``approved=False`` the endpoint returns
+    a structured 403 envelope with ``code="approval_required"``;
+    no draft is built, no ticket is persisted, no audit row is
+    appended. When ``approved=True`` the ticket is persisted, the
+    audit row is appended, and the response carries the assigned
+    ``ticket_id`` plus a :class:`TicketApprovalInfo` block.
     """
     store = _store(request)
-    draft = build_draft(body.incident, approved=body.approved)
+
+    # Feature 6.2 — fail closed if approval is missing.
     if not body.approved:
-        return draft
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=TicketApprovalRequiredError(
+                message="ticket creation requires explicit approval",
+                request_id=uuid.uuid4().hex,
+            ).model_dump(),
+        )
+
+    settings = get_settings()
+    draft = build_draft(body.incident, approved=True)
 
     # Persist the ticket. The store allocates the id; the draft
     # body is the wire body verbatim.
     ticket_id = store.next_id()
     now = datetime.now(tz=UTC)
+    request_id = uuid.uuid4().hex
     persisted = Ticket(
         id=ticket_id,
         title=draft.title,
@@ -94,7 +138,29 @@ def draft_endpoint(
         created_at=now,
     )
     store.create(persisted)
-    return draft.model_copy(update={"ticket_id": ticket_id, "preview": False})
+
+    # Append the audit row. ``append_audit`` allocates the entry
+    # id and is thread-safe via the store's lock.
+    store.append_audit(
+        ticket_id=ticket_id,
+        request_id=request_id,
+        approved_by=settings.approval_user,
+        approved_at=now,
+        incident_id=body.incident.get("id"),
+    )
+
+    approval = TicketApprovalInfo(
+        approved_by=settings.approval_user,
+        approved_at=now,
+        request_id=request_id,
+    )
+    return draft.model_copy(
+        update={
+            "ticket_id": ticket_id,
+            "preview": False,
+            "approval": approval,
+        }
+    )
 
 
 @router.get("/{ticket_id}", response_model=Ticket)
@@ -108,3 +174,9 @@ def get_ticket(request: Request, ticket_id: str) -> Ticket:
             detail={"code": "not_found", "message": f"Ticket {ticket_id} not found"},
         )
     return ticket
+
+
+# Re-export the type for the public surface; the router file is the
+# canonical importer for these Pydantic shapes from the search/audit
+# path (the orchestrator uses them via ``TicketDraftResponse``).
+__all__ = ["router"]
