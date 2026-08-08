@@ -1,0 +1,110 @@
+%% Incident-and-Ticket-Enrichment-Copilot — architecture overview
+%% Renders to docs/architecture-diagram.png via Mermaid CLI.
+%% Source: docs/architecture.md § 1 (the 12 layers).
+flowchart TB
+    subgraph GUI["GUI (apps/frontend/)"]
+        UI["Streamlit UI<br/>ui.py"]
+        ChatClient["ChatClient<br/>chat_client.py"]
+        TicketClient["TicketClient<br/>ticket_client.py"]
+    end
+
+    subgraph Orchestrator["Copilot orchestration (apps/backend/orchestrator/)"]
+        Routes["FastAPI routes.py"]
+        Planner["Planner<br/>MockPlanner / LLMPlanner"]
+        Chain["ChainRunner<br/>chain.py"]
+        MCPClientA["MCPClient<br/>(alarm-management)"]
+        MCPClientT["MCPClient<br/>(ticketing)"]
+        RagStep["RagStepExecutor<br/>rag_step.py"]
+        Conv["ConversationStore<br/>conversation.py"]
+    end
+
+    subgraph MCPServers["MCP servers (mcp-servers/)"]
+        AlarmMCP["alarm-management MCP<br/>5 tools"]
+        TicketMCP["ticketing MCP<br/>2 tools"]
+    end
+
+    subgraph Connectors["API / source-system connectors (connectors/)"]
+        AlarmAPI["alarm_api<br/>FastAPI simulator"]
+        TicketMock["ticket_mock<br/>in-memory store"]
+    end
+
+    subgraph RAG["RAG (rag/)"]
+        Ingest["Ingestion<br/>loader / chunker /<br/>embedder / index"]
+        Retrieve["RetrievalService<br/>service.py"]
+        Injection["Injection blocklist<br/>injection.py"]
+    end
+
+    subgraph Foundation["Foundation (core/)"]
+        Domain["Domain models<br/>domain.py"]
+        Config["Settings<br/>config.py"]
+        Logging["Logging<br/>logging.py"]
+    end
+
+    subgraph Persistence["Persistence"]
+        VarIdx["var/index/v1.pkl<br/>(persisted RAG)"]
+        ConvMem[("In-memory<br/>ConversationStore")]
+    end
+
+    Tests["Tests (tests/)<br/>471 unit / integration / e2e"]
+
+    %% MCP path
+    UI -->|"POST /chat"| ChatClient
+    ChatClient -->|"POST /chat"| Routes
+    UI -->|"POST /tickets/*"| TicketClient
+    TicketClient -->|"POST /tickets/*"| Routes
+    Routes --> Planner
+    Routes --> Conv
+    Planner --> Chain
+    Chain -->|"TOOL_CALL"| MCPClientA
+    Chain -->|"CREATE_TICKET_DRAFT"| MCPClientT
+    Chain -->|"RAG_QUERY"| RagStep
+    MCPClientA -->|"Streamable HTTP"| AlarmMCP
+    MCPClientT -->|"Streamable HTTP"| TicketMCP
+    AlarmMCP -->|"Bearer + X-Trace-Id"| AlarmAPI
+    TicketMCP -->|"Bearer + X-Trace-Id"| TicketMock
+
+    %% RAG path
+    RagStep --> Retrieve
+    Retrieve --> Injection
+    Ingest -.->|"build time"| VarIdx
+    Retrieve -.->|"loads at boot"| VarIdx
+
+    %% Foundation
+    Routes -.-> Config
+    AlarmMCP -.-> Config
+    TicketMCP -.-> Config
+    Routes -.-> Logging
+    AlarmMCP -.-> Logging
+    TicketMCP -.-> Logging
+    Routes -.-> Domain
+    Chain -.-> Domain
+
+    %% Persistence
+    Conv -.-> ConvMem
+
+    %% Test loop
+    Tests -.->|covers| UI
+    Tests -.->|covers| Routes
+    Tests -.->|covers| AlarmMCP
+    Tests -.->|covers| TicketMCP
+    Tests -.->|covers| Retrieve
+    Tests -.->|covers| AlarmAPI
+    Tests -.->|covers| TicketMock
+
+    classDef gui fill:#fef3c7,stroke:#92400e
+    classDef orchestrator fill:#dbeafe,stroke:#1e3a8a
+    classDef mcp fill:#fce7f3,stroke:#831843
+    classDef connector fill:#e9d5ff,stroke:#581c87
+    classDef rag fill:#d1fae5,stroke:#064e3b
+    classDef foundation fill:#f3f4f6,stroke:#1f2937
+    classDef persistence fill:#fed7aa,stroke:#7c2d12
+    classDef tests fill:#fee2e2,stroke:#7f1d1d
+
+    class UI,ChatClient,TicketClient gui
+    class Routes,Planner,Chain,MCPClientA,MCPClientT,RagStep,Conv orchestrator
+    class AlarmMCP,TicketMCP mcp
+    class AlarmAPI,TicketMock connector
+    class Ingest,Retrieve,Injection rag
+    class Domain,Config,Logging foundation
+    class VarIdx,ConvMem persistence
+    class Tests tests
