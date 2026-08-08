@@ -12,6 +12,16 @@ def test_settings_defaults(monkeypatch: object) -> None:
     assert s.mcp_server_url == "http://localhost:9000"
     assert s.llm_provider == "mock"
     assert s.log_level == "INFO"
+    # Feature 7.1 — the GUI's default backend URL.
+    assert s.copilot_backend_url == "http://localhost:8000"
+    assert s.frontend_port == 5173
+
+
+def test_copilot_backend_url_env_override(monkeypatch: object) -> None:
+    """``COPILOT_BACKEND_URL`` overrides the default (Feature 7.1)."""
+    monkeypatch.setenv("COPILOT_BACKEND_URL", "https://prod-copilot.example.com")
+    s = Settings()
+    assert s.copilot_backend_url == "https://prod-copilot.example.com"
 
 
 def test_settings_env_override(monkeypatch: object) -> None:
