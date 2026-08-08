@@ -1,7 +1,7 @@
 """Dependency wiring for the orchestrator.
 
 The wiring layer centralises the construction of the
-:class:`ChainRunner`, MCP client, RAG service, conversation
+:class:`ChainRunner`, MCP clients, RAG service, conversation
 store, and planner. The FastAPI app factory calls
 :func:`build_orchestrator` exactly once at startup and
 attaches the result to ``app.state``.
@@ -15,6 +15,12 @@ Why a wiring module
 * The factory is the boundary against which the
   orchestrator's "no direct httpx to alarm-api" invariant
   is enforceable. ``MCPClient`` is the only allowed path.
+
+Feature 6.1 adds a second ``MCPClient`` for the ticketing
+server. The chain runner routes ``CREATE_TICKET_DRAFT`` steps
+to this client and the rest to the alarm-management client.
+Construction is identical to the alarm client — just a
+different base URL.
 """
 from __future__ import annotations
 
@@ -44,6 +50,7 @@ class OrchestratorBundle:
     conversation_store: ConversationStore
     mcp: MCPClient
     rag: RagStepExecutor
+    ticket_mcp: MCPClient | None = None
 
 
 def build_orchestrator(
@@ -52,6 +59,7 @@ def build_orchestrator(
     index_path: Path | None = None,
     llm: LLMClient | None = None,
     mcp: MCPClient | None = None,
+    ticket_mcp: MCPClient | None = None,
 ) -> OrchestratorBundle:
     """Build the orchestrator's runtime dependencies.
 
@@ -68,14 +76,22 @@ def build_orchestrator(
         Override the LLM client. Defaults to the configured
         provider (``llm_provider`` / ``llm_model``).
     mcp:
-        Override the MCP client. Defaults to the configured
-        ``mcp_server_url``.
+        Override the alarm-management MCP client. Defaults
+        to the configured ``mcp_server_url``.
+    ticket_mcp:
+        Override the ticketing MCP client. Defaults to the
+        configured ``ticketing_mcp_url``. When ``None``, the
+        chain runner emits a ``TraceStep(outcome="error")``
+        for ``CREATE_TICKET_DRAFT`` steps.
     """
     if settings is None:
         settings = get_settings()
 
     if mcp is None:
         mcp = MCPClient(base_url=settings.mcp_server_url)
+
+    if ticket_mcp is None:
+        ticket_mcp = MCPClient(base_url=settings.ticketing_mcp_url)
 
     if llm is None:
         llm = build_llm_client(
@@ -94,12 +110,13 @@ def build_orchestrator(
 
     rag = _build_rag(index_path=index_path, settings=settings)
 
-    chain = ChainRunner(mcp=mcp, rag=rag)
+    chain = ChainRunner(mcp=mcp, rag=rag, ticket_mcp=ticket_mcp)
     store = ConversationStore()
 
     log.info(
         "orchestrator.built",
         mcp_server=settings.mcp_server_url,
+        ticket_mcp_server=settings.ticketing_mcp_url,
         llm_provider=settings.llm_provider,
         planner_provider=settings.planner_provider,
         index_path=str(index_path),
@@ -111,6 +128,7 @@ def build_orchestrator(
         conversation_store=store,
         mcp=mcp,
         rag=rag,
+        ticket_mcp=ticket_mcp,
     )
 
 

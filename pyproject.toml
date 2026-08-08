@@ -68,18 +68,21 @@ packages = [
     "mcp_servers",
     "mcp_servers.alarm_management",
     "mcp_servers.optional_secondary_server",
+    "mcp_servers.ticketing",
     "rag",
     "rag.ingestion",
     "rag.retrieval",
     "rag.tests",
     "connectors",
     "connectors.alarm_api",
+    "connectors.ticket_mock",
 ]
 
 [tool.setuptools.package-dir]
 "mcp_servers" = "mcp-servers"
 "mcp_servers.alarm_management" = "mcp-servers/alarm-management"
 "mcp_servers.optional_secondary_server" = "mcp-servers/optional-secondary-server"
+"mcp_servers.ticketing" = "mcp-servers/ticketing"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -112,6 +115,12 @@ ignore = ["E501"]
 # reads at schema-build time, so the rule doesn't apply. The MCP
 # SDK's flat-kwargs shape depends on Field() being in the signature.
 "mcp-servers/alarm-management/tools.py" = ["B008"]
+# Same `Field(default=..., description=...)` idiom as the alarm-management
+# tools file — see the comment above. The `Query(None)` defaults on the
+# ticket-mock router are FastAPI's documented pattern for declaring
+# optional query parameters; the rule is for mutable defaults.
+"mcp-servers/ticketing/tools.py" = ["B008"]
+"connectors/ticket_mock/routers/tickets.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.13"

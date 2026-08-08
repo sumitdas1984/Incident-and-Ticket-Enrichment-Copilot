@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # --- Ticketing (Epic 6) ---
     ticketing_api_url: str = "http://localhost:8003"
     ticketing_api_port: int = 8003
+    ticketing_api_token: SecretStr = SecretStr("replace-me")
+    ticketing_mcp_url: str = "http://localhost:9001"
+    ticketing_mcp_port: int = 9001
 
     # --- App ---
     backend_port: int = 8000

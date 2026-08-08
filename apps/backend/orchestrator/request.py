@@ -78,9 +78,50 @@ class ChatResponse(BaseModel):
     incident: Incident | None = None
 
 
+class TicketDraftRequest(BaseModel):
+    """The HTTP request body for ``POST /tickets/draft``.
+
+    Carries the structured ``Incident`` payload (the same shape
+    returned by ``/chat`` in the ``incident`` field) and the
+    explicit-user-confirmation flag. When ``approved=True`` the
+    ticket-mock persists the ticket and the response carries
+    the assigned ``ticket_id``. When ``False`` the response is
+    a preview draft with ``preview=true`` and no ``ticket_id``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    incident: dict[str, Any]
+    approved: bool = False
+
+
+class TicketDraftResponse(BaseModel):
+    """The HTTP response body for ``POST /tickets/draft``.
+
+    Mirrors the ticket-mock's :class:`TicketDraftResponse` shape
+    so the wire envelope never has to widen. The
+    ``conversation_id`` is the orchestrator's id for this turn
+    (audit trail).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    conversation_id: str
+    title: str
+    body: str
+    severity: str
+    assignee: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    ticket_id: str | None = None
+    preview: bool = True
+    trace: list[TraceStep] = Field(default_factory=list)
+
+
 __all__ = [
     "ChatRequest",
     "ChatResponse",
     "ConversationMessage",
+    "TicketDraftRequest",
+    "TicketDraftResponse",
     "ToolCatalogEntry",
 ]
