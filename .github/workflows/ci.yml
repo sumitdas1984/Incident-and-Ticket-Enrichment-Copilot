@@ -39,9 +39,17 @@ jobs:
         # a green CI run (Feature 1.1 is scaffolding only; real tests
         # land in Epic 8). Every other non-zero exit code propagates
         # so real test failures still fail the job.
+        #
+        # ``-m "not slow_embeddings"`` excludes the
+        # ``test_sentence_transformer_embedder_shape`` test, which
+        # downloads ``sentence-transformers/all-MiniLM-L6-v2`` from
+        # Hugging Face Hub on first run. HF rate-limits the runner,
+        # causing flaky 429s. The test is for local development;
+        # run ``uv run pytest -m slow_embeddings`` to exercise it
+        # against a cached model.
         run: |
           set +e
-          uv run pytest -ra
+          uv run pytest -ra -m "not slow_embeddings"
           EXIT_CODE=$?
           set -e
           if [ "$EXIT_CODE" -eq 5 ]; then
