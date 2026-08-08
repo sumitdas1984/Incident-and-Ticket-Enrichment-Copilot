@@ -5,7 +5,10 @@ endpoint accepts a typed request envelope, runs the chain,
 and returns the response envelope with the answer,
 citations, and trace. The ``/tickets/draft`` endpoint accepts
 an ``Incident`` payload and returns a ticket draft (or a
-persisted ticket, when ``approved=True``).
+persisted ticket, when ``approved=True``). The
+``/tickets/preview`` endpoint (Feature 7.2) is a read-only
+projection of the same draft logic — no MCP, no chain,
+no persistence.
 """
 from __future__ import annotations
 
@@ -30,6 +33,8 @@ from .orchestrator.request import (
     ConversationMessage,
     TicketDraftRequest,
     TicketDraftResponse,
+    TicketPreviewRequest,
+    TicketPreviewResponse,
 )
 
 log = get_logger(__name__)
@@ -122,6 +127,44 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         raise HTTPException(status_code=500, detail={"code": "orchestrator_error", "message": str(exc)}) from exc
     finally:
         clear_context()
+
+
+@router.post("/tickets/preview", response_model=TicketPreviewResponse)
+async def ticket_preview(req: TicketPreviewRequest) -> TicketPreviewResponse:
+    """Project a ticket draft without persisting.
+
+    Feature 7.2 — the GUI's confirmation modal calls this when the
+    operator clicks "Create ticket" so the editable draft form
+    can be pre-populated with the projected text. No MCP call,
+    no chain run, no audit row, no conversation-store append.
+
+    The text is produced by the same ``build_draft(approved=False)``
+    helper the chain invokes through the MCP tool — so the GUI
+    sees exactly the title / body / severity / labels it would
+    see on the persisted path (Feature 6.2). ``approved=True`` on
+    ``POST /tickets/draft`` is the only path that persists.
+    """
+    from connectors.ticket_mock.draft import build_draft
+
+    incident = req.incident
+    draft = build_draft(incident, approved=False)
+    incident_id = incident.get("id") if isinstance(incident, dict) else None
+
+    log.info(
+        "ticket_preview.projected",
+        title=draft.title,
+        severity=draft.severity,
+        label_count=len(draft.labels),
+        incident_id=incident_id,
+    )
+    return TicketPreviewResponse(
+        title=draft.title,
+        body=draft.body,
+        severity=draft.severity,
+        assignee=draft.assignee,
+        labels=list(draft.labels),
+        incident_id=incident_id if isinstance(incident_id, str) else None,
+    )
 
 
 @router.post("/tickets/draft", response_model=TicketDraftResponse)

@@ -121,11 +121,55 @@ class TicketDraftResponse(BaseModel):
     trace: list[TraceStep] = Field(default_factory=list)
 
 
+class TicketPreviewRequest(BaseModel):
+    """The HTTP request body for ``POST /tickets/preview``.
+
+    Feature 7.2 — the GUI calls this endpoint when the operator
+    clicks "Create ticket" so the editable draft form can be
+    populated with the projected ticket draft *before* the user
+    approves. No ticket is persisted on this path — the orchestrator
+    calls ``build_draft(approved=False)`` directly. Feature 6.2's
+    approval gate (``POST /tickets/draft`` with ``approved=True``)
+    remains the only path that persists.
+
+    The ``incident`` field is the same dict shape the GUI gets
+    back from ``POST /chat`` in the ``incident`` field — no field
+    projection happens here.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    incident: dict[str, Any]
+
+
+class TicketPreviewResponse(BaseModel):
+    """The HTTP response body for ``POST /tickets/preview``.
+
+    Mirrors the fields ``build_draft()`` populates from the
+    incident payload. No ``conversation_id``, ``trace``, or
+    ``approval`` block — previews are pure projections, not
+    orchestrator runs.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    title: str
+    body: str
+    severity: str
+    assignee: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    # Echo of ``incident["id"]`` for the GUI to correlate the
+    # preview with the structured Incident it came from.
+    incident_id: str | None = None
+
+
 __all__ = [
     "ChatRequest",
     "ChatResponse",
     "ConversationMessage",
     "TicketDraftRequest",
     "TicketDraftResponse",
+    "TicketPreviewRequest",
+    "TicketPreviewResponse",
     "ToolCatalogEntry",
 ]
