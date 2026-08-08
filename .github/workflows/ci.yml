@@ -47,9 +47,18 @@ jobs:
         # causing flaky 429s. The test is for local development;
         # run ``uv run pytest -m slow_embeddings`` to exercise it
         # against a cached model.
+        #
+        # ``--cov`` flags generate a coverage report (Feature 8.1,
+        # Story 8.1.1 acceptance: coverage ≥ 80 % on core packages).
+        # The committed baseline lives in ``docs/coverage-baseline.md``.
         run: |
           set +e
-          uv run pytest -ra -m "not slow_embeddings"
+          uv run pytest -ra -m "not slow_embeddings" \
+            --cov=apps \
+            --cov=rag \
+            --cov=connectors \
+            --cov=mcp_servers \
+            --cov=core
           EXIT_CODE=$?
           set -e
           if [ "$EXIT_CODE" -eq 5 ]; then
@@ -57,3 +66,16 @@ jobs:
             exit 0
           fi
           exit "$EXIT_CODE"
+        - name: Upload coverage artifact
+          if: always()
+          continue-on-error: true
+          if [ -f .coverage ]; then
+            mkdir -p coverage-artifact
+            cp .coverage coverage-artifact/coverage.data
+          fi
+        - uses: actions/upload-artifact@v4
+          with:
+            name: coverage-data
+            path: coverage-artifact/
+            if-no-files-found: ignore
+            retention-days: 7
