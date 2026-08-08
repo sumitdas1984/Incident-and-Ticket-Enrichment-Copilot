@@ -41,6 +41,7 @@ import os
 
 import uvicorn
 from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp_servers.alarm_management.alarm_api_client import AlarmApiClient
 from mcp_servers.alarm_management.health import register_health_routes
 from mcp_servers.alarm_management.tools import register_tools
@@ -125,7 +126,18 @@ class AlarmManagementLifespan(MCPServerLifespan):
 # Rebuild the module-level app with the enhanced lifespan. We do
 # this here (not in ``make_asgi_app``) so the helper stays generic
 # and reusable by the test fixtures.
-_starlette_app = mcp_server.streamable_http_app()
+# The MCP SDK's default TransportSecuritySettings rejects requests
+# whose Host header is anything other than 127.0.0.1, localhost, or
+# [::1]. Inside the docker network, the orchestrator reaches us as
+# ``mcp-server:9000`` which is not on the default allow-list, so the
+# request is rejected with ``Invalid Host header``. We disable DNS
+# rebinding protection (the SDK's anti-CSRF measure) so docker-network
+# clients can talk to us. TrustedHost middleware stays on for HTTP
+# services exposed on the public internet — this is intra-cluster.
+_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=False,
+)
+_starlette_app = mcp_server.streamable_http_app(transport_security=_security)
 app = Starlette(
     debug=False,
     routes=_starlette_app.routes,
@@ -135,15 +147,21 @@ app = Starlette(
 
 
 async def _serve() -> None:
+    # The container-internal port is fixed at 9000; the docker-compose
+    # ``ports:`` mapping forwards the host port to this container
+    # port. Binding to ``settings.mcp_server_port`` (the host port
+    # from .env) would silently mismatch the docker-compose port
+    # mapping and break the container healthcheck.
+    container_port = int(os.environ.get("CONTAINER_PORT", "9000"))
     log.info(
         "starting",
         component="mcp-server-alarm-management",
-        port=settings.mcp_server_port,
+        port=container_port,
     )
     config = uvicorn.Config(
         app,  # type: ignore[arg-type]
         host="0.0.0.0",
-        port=settings.mcp_server_port,
+        port=container_port,
         log_level=settings.log_level.lower(),
     )
     server = uvicorn.Server(config)

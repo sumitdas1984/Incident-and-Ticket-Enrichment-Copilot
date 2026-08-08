@@ -39,6 +39,10 @@ COPY core/ ./core/
 COPY mcp-servers/ ./mcp-servers/
 COPY rag/ ./rag/
 COPY connectors/ ./connectors/
+# Bundle the persisted RAG index so the orchestrator can boot
+# without re-running ingestion. Built locally with `make ingest`
+# (the deterministic embedder path needs no network).
+COPY var/ ./var/
 
 # Install the project itself (no deps -- already resolved above)
 # MODULE_PATH is the dotted Python module path to the service's

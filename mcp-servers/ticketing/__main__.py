@@ -18,6 +18,7 @@ import os
 
 import uvicorn
 from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp_servers.alarm_management.lifespan import MCPServerLifespan
 from starlette.applications import Starlette
 
@@ -79,7 +80,17 @@ class TicketingLifespan(MCPServerLifespan):
                 await client.aclose()
 
 
-_starlette_app = mcp_server.streamable_http_app()
+# The MCP SDK's default TransportSecuritySettings rejects requests
+# whose Host header is anything other than 127.0.0.1, localhost, or
+# [::1]. Inside the docker network, the orchestrator reaches us as
+# ``ticketing-mcp:9001`` which is not on the default allow-list, so
+# the request is rejected with ``Invalid Host header``. We disable
+# DNS rebinding protection (the SDK's anti-CSRF measure) so
+# docker-network clients can talk to us.
+_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=False,
+)
+_starlette_app = mcp_server.streamable_http_app(transport_security=_security)
 app = Starlette(
     debug=False,
     routes=_starlette_app.routes,
@@ -89,15 +100,21 @@ app = Starlette(
 
 
 async def _serve() -> None:
+    # The container-internal port is fixed at 9001; the docker-compose
+    # ``ports:`` mapping forwards the host port to this container
+    # port. Binding to ``settings.ticketing_mcp_port`` (the host port
+    # from .env) would silently mismatch the docker-compose port
+    # mapping and break the container healthcheck.
+    container_port = int(os.environ.get("CONTAINER_PORT", "9001"))
     log.info(
         "starting",
         component="mcp-server-ticketing",
-        port=settings.ticketing_mcp_port,
+        port=container_port,
     )
     config = uvicorn.Config(
         app,  # type: ignore[arg-type]
         host="0.0.0.0",
-        port=settings.ticketing_mcp_port,
+        port=container_port,
         log_level=settings.log_level.lower(),
     )
     server = uvicorn.Server(config)
