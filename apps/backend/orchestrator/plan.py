@@ -38,6 +38,7 @@ class PlanStepKind(StrEnum):
     TOOL_CALL = "tool_call"
     RAG_QUERY = "rag_query"
     SEARCH_SIMILAR_TICKETS = "search_similar_tickets"
+    CREATE_TICKET_DRAFT = "create_ticket_draft"
     COMPOSE = "compose"
 
 
@@ -96,6 +97,25 @@ class ComposePayload(BaseModel):
     )
 
 
+class CreateTicketDraftPayload(BaseModel):
+    """Generate (and optionally persist) a ticket draft from an Incident.
+
+    The handler invokes the ticketing MCP server's
+    ``create_ticket_draft`` tool. The ``incident`` payload is the
+    structured ``core.domain.Incident`` field-for-field; the MCP
+    client serialises it via ``model_dump(mode="json")`` before
+    sending. The ``approved`` flag is the explicit-user-confirmation
+    gate (hard constraint #3): the orchestrator's chain sets it
+    to ``True`` only when the user has confirmed the create.
+    """
+
+    model_config = _BASE_PLAN_CONFIG
+
+    kind: Literal[PlanStepKind.CREATE_TICKET_DRAFT] = PlanStepKind.CREATE_TICKET_DRAFT
+    incident: dict[str, Any] = Field(default_factory=dict)
+    approved: bool = False
+
+
 class PlanStep(BaseModel):
     """One typed step in the plan."""
 
@@ -103,7 +123,7 @@ class PlanStep(BaseModel):
 
     step_id: str
     kind: PlanStepKind
-    payload: ToolCallPayload | RagQueryPayload | SimilarTicketsPayload | ComposePayload = Field(  # noqa: E501
+    payload: ToolCallPayload | RagQueryPayload | SimilarTicketsPayload | CreateTicketDraftPayload | ComposePayload = Field(  # noqa: E501
         discriminator="kind",
     )
     depends_on: list[str] = Field(default_factory=list)
@@ -132,6 +152,7 @@ class OrchestrationPlan(BaseModel):
 
 __all__ = [
     "ComposePayload",
+    "CreateTicketDraftPayload",
     "OrchestrationPlan",
     "PlanStep",
     "PlanStepKind",

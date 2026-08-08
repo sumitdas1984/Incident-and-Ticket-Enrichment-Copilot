@@ -36,6 +36,7 @@ from .errors import ChainError
 from .mcp_client import MCPClient
 from .plan import (
     ComposePayload,
+    CreateTicketDraftPayload,
     OrchestrationPlan,
     PlanStep,
     PlanStepKind,
@@ -89,9 +90,14 @@ class ChainRunner:
         *,
         mcp: MCPClient,
         rag: RagStepExecutor,
+        ticket_mcp: MCPClient | None = None,
     ) -> None:
         self._mcp = mcp
         self._rag = rag
+        # The optional second MCP client handles the ticketing
+        # server. When ``None``, ``CREATE_TICKET_DRAFT`` steps
+        # fail with a ``ChainError``-worthy transport error.
+        self._ticket_mcp = ticket_mcp
 
     async def run(self, plan: OrchestrationPlan) -> ChainResult:
         """Execute ``plan`` and return the :class:`ChainResult`."""
@@ -144,6 +150,36 @@ class ChainRunner:
                             similar_tickets = list(items)
                     prior_outputs[step.step_id] = output
                     trace.append(ts)
+                elif step.kind == PlanStepKind.CREATE_TICKET_DRAFT:
+                    payload = step.payload
+                    if not isinstance(payload, CreateTicketDraftPayload):
+                        raise ChainError(
+                            f"step {step.step_id} kind=create_ticket_draft "
+                            f"but payload is {type(payload).__name__}"
+                        )
+                    if self._ticket_mcp is None:
+                        output, ts = None, TraceStep(
+                            server="ticketing",
+                            tool="create_ticket_draft",
+                            args=payload.model_dump(),
+                            output=None,
+                            duration_ms=0,
+                            outcome="error",
+                            error="ticket MCP client not configured",
+                        )
+                    else:
+                        output, ts = await self._call_mcp(
+                            step_id=step.step_id,
+                            tool="create_ticket_draft",
+                            args={
+                                "incident": payload.incident,
+                                "approved": payload.approved,
+                            },
+                            server="ticketing",
+                            client=self._ticket_mcp,
+                        )
+                    prior_outputs[step.step_id] = output
+                    trace.append(ts)
                 elif step.kind == PlanStepKind.RAG_QUERY:
                     payload = step.payload
                     if not isinstance(payload, RagQueryPayload):
@@ -193,7 +229,13 @@ class ChainRunner:
         )
 
     async def _call_mcp(
-        self, *, step_id: str, tool: str, args: dict[str, Any], server: str,
+        self,
+        *,
+        step_id: str,
+        tool: str,
+        args: dict[str, Any],
+        server: str,
+        client: MCPClient | None = None,
     ) -> tuple[Any, TraceStep]:
         """Call the MCP tool and surface partial failure as a trace step.
 
@@ -201,9 +243,17 @@ class ChainRunner:
         steps dispatch through this helper. A failure produces a
         ``TraceStep(outcome="error")`` and an ``output=None``; the
         chain runner checks ``output is None`` and continues.
+
+        Parameters
+        ----------
+        client:
+            Override the default ``self._mcp`` client. Used by
+            ``CREATE_TICKET_DRAFT`` steps to route to the ticketing
+            server while the rest of the chain uses ``self._mcp``.
         """
+        mcp = client if client is not None else self._mcp
         try:
-            return await self._mcp.call(tool=tool, args=args)
+            return await mcp.call(tool=tool, args=args)
         except Exception as exc:  # noqa: BLE001 — surface partial failure as trace step
             return None, TraceStep(
                 server=server,

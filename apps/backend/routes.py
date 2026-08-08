@@ -3,9 +3,13 @@
 Mounted by :func:`apps.backend.create_app`. The ``/chat``
 endpoint accepts a typed request envelope, runs the chain,
 and returns the response envelope with the answer,
-citations, and trace.
+citations, and trace. The ``/tickets/draft`` endpoint accepts
+an ``Incident`` payload and returns a ticket draft (or a
+persisted ticket, when ``approved=True``).
 """
 from __future__ import annotations
+
+import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -14,7 +18,19 @@ from core.logging import bind_context, clear_context, get_logger
 
 from .orchestrator.errors import PlannerError
 from .orchestrator.incident import IncidentContext, build_incident
-from .orchestrator.request import ChatRequest, ChatResponse, ConversationMessage
+from .orchestrator.plan import (
+    CreateTicketDraftPayload,
+    OrchestrationPlan,
+    PlanStep,
+    PlanStepKind,
+)
+from .orchestrator.request import (
+    ChatRequest,
+    ChatResponse,
+    ConversationMessage,
+    TicketDraftRequest,
+    TicketDraftResponse,
+)
 
 log = get_logger(__name__)
 
@@ -103,6 +119,99 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         raise HTTPException(status_code=502, detail={"code": "rag_error", "message": str(exc)}) from exc
     except CopilotError as exc:
         log.warning("orchestrator.failed", error=str(exc))
+        raise HTTPException(status_code=500, detail={"code": "orchestrator_error", "message": str(exc)}) from exc
+    finally:
+        clear_context()
+
+
+@router.post("/tickets/draft", response_model=TicketDraftResponse)
+async def ticket_draft(req: TicketDraftRequest, request: Request) -> TicketDraftResponse:
+    """Generate a ticket draft from an incident payload.
+
+    Builds a one-step ``OrchestrationPlan`` with a single
+    ``CREATE_TICKET_DRAFT`` step and runs it through the chain.
+    The orchestrator's chain runner routes the step to the
+    ticketing MCP server's ``create_ticket_draft`` tool. The
+    response carries the ticket-mock's draft (preview mode
+    when ``approved=False``, persisted ticket id when ``True``).
+
+    The endpoint also appends a ``user``/``assistant`` turn pair
+    to the conversation for the audit trail. The ``assistant``
+    turn records the draft text + the ticket id (or the preview
+    flag) so the conversation history mirrors the chain's
+    output.
+    """
+    bundle = request.app.state.orchestrator
+    trace_id = request.headers.get("x-trace-id") or ""
+    if trace_id:
+        bind_context(trace_id=trace_id)
+    try:
+        history = bundle.conversation_store.get_or_create(None)
+        bind_context(conversation_id=history.id)
+
+        intent = str(req.incident.get("title") or "ticket draft")
+        plan = OrchestrationPlan(
+            plan_id=uuid.uuid4().hex,
+            intent=intent,
+            steps=[
+                PlanStep(
+                    step_id="t1",
+                    kind=PlanStepKind.CREATE_TICKET_DRAFT,
+                    payload=CreateTicketDraftPayload(
+                        incident=req.incident,
+                        approved=req.approved,
+                    ),
+                ),
+            ],
+        )
+        log.info(
+            "ticket_draft.plan",
+            plan_id=plan.plan_id,
+            approved=req.approved,
+        )
+
+        result = await bundle.chain.run(plan)
+
+        # The chain captured the ticket-mock's response in
+        # ``prior_outputs["t1"]``. The response shape is
+        # {title, body, severity, assignee, labels, ticket_id, preview}.
+        draft = result.prior_outputs.get("t1") or {}
+        if not isinstance(draft, dict):
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "ticket_draft_failed", "message": "No ticket draft returned"},
+            )
+
+        bundle.conversation_store.append(
+            history.id,
+            ConversationMessage(role="user", content=f"draft ticket: {intent}"),
+        )
+        bundle.conversation_store.append(
+            history.id,
+            ConversationMessage(
+                role="assistant",
+                content=(
+                    f"ticket_id={draft.get('ticket_id')} preview={draft.get('preview')}"
+                ),
+            ),
+        )
+
+        return TicketDraftResponse(
+            conversation_id=history.id,
+            title=str(draft.get("title") or ""),
+            body=str(draft.get("body") or ""),
+            severity=str(draft.get("severity") or "medium"),
+            assignee=draft.get("assignee"),
+            labels=list(draft.get("labels") or []),
+            ticket_id=draft.get("ticket_id"),
+            preview=bool(draft.get("preview", True)),
+            trace=result.trace,
+        )
+    except MCPError as exc:
+        log.warning("ticket_mcp.failed", error=str(exc))
+        raise HTTPException(status_code=502, detail={"code": "ticket_mcp_error", "message": str(exc)}) from exc
+    except CopilotError as exc:
+        log.warning("ticket_draft.failed", error=str(exc))
         raise HTTPException(status_code=500, detail={"code": "orchestrator_error", "message": str(exc)}) from exc
     finally:
         clear_context()
