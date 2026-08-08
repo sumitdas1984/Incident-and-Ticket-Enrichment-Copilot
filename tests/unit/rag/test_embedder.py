@@ -55,10 +55,14 @@ def test_deterministic_embedder_handles_higher_dimensions() -> None:
 
 @pytest.mark.slow_embeddings
 def test_sentence_transformer_embedder_shape() -> None:
-    # This test is skipped on CI by default (see
-    # ``pyproject.toml``'s ``addopts = -ra --strict-markers``).
-    # Run ``uv run pytest -m slow_embeddings`` to exercise the
-    # real model.
+    # CI excludes this marker (see ``.github/workflows/ci.yml``)
+    # because the test downloads
+    # ``sentence-transformers/all-MiniLM-L6-v2`` from Hugging Face
+    # Hub on first run and the CI runner gets rate-limited (HTTP
+    # 429). Run locally with ``uv run pytest -m slow_embeddings``
+    # against a cached model. The ``pytest.importorskip`` makes
+    # the test a clean skip on environments without the dep,
+    # even when the marker is enabled.
     pytest.importorskip("sentence_transformers")
     from rag.ingestion import SentenceTransformerEmbeddingModel
 
