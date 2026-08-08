@@ -17,9 +17,15 @@ Two paths:
 We use the in-process ``TestClient`` against the real
 ``apps.backend.create_app()`` and an in-process ticket-mock
 fixture, so no Docker / Newman / network is involved.
+
+The orchestrator's wiring loads the persisted RAG index at
+``var/index/v1.pkl`` (a build artefact, gitignored). When the
+index is missing we skip the suite — same pattern as
+``tests/unit/rag/test_orchestrator_rag.py``.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -28,6 +34,21 @@ from fastapi.testclient import TestClient
 from apps.backend import create_app
 from connectors.ticket_mock.app import create_app as create_ticket_mock_app
 from core.config import get_settings
+
+
+INDEX_PATH = Path("var/index/v1.pkl")
+
+
+@pytest.fixture(autouse=True)
+def _require_rag_index() -> None:
+    """Skip the whole module when the persisted RAG index is
+    absent. The orchestrator's wiring fails closed at startup
+    without it, so the fixtures can't run."""
+    if not INDEX_PATH.exists():
+        pytest.skip(
+            f"Persisted RAG index not found at {INDEX_PATH}. "
+            "Run `make ingest` to build it."
+        )
 
 
 @pytest.fixture
