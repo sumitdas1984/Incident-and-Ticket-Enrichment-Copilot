@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     # --- App ---
     backend_port: int = 8000
     frontend_port: int = 5173
+    # The copilot-backend URL the Streamlit GUI POSTs /chat to. The
+    # default targets a local dev backend; the docker-compose
+    # ``frontend`` service overrides this to ``http://copilot-backend:8000``
+    # so the in-container Streamlit reaches the backend over the
+    # compose network. No URL is hard-coded in any other module — this
+    # is the only place this value is read (Feature 7.1, Story 7.1.2).
+    copilot_backend_url: str = "http://localhost:8000"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
 

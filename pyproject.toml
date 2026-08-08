@@ -44,6 +44,11 @@ dependencies = [
     # grammar is small enough that a hand-rolled YAML reader
     # keeps the dep footprint down.
     "PyYAML>=6.0",
+    # GUI for the copilot (Feature 7.1). Python-only — keeps the
+    # Docker image lean (no Node / bundler / separate build stage).
+    # ``st.chat_input`` / ``st.chat_message`` arrived in 1.27; we pin
+    # to the first minor that ships them so the lock file is stable.
+    "streamlit>=1.39",
 ]
 
 [project.optional-dependencies]
