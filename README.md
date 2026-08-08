@@ -303,6 +303,8 @@ curl -sX POST http://localhost:8001/tickets/draft \
 | [`docs/design-decisions.md`](docs/design-decisions.md) | Reviewers | Rejected alternatives + rationale. |
 | [`docs/known-limitations.md`](docs/known-limitations.md) | Reviewers | What's deliberate vs deferred, and what it'd take to lift each. |
 | [`docs/coverage-baseline.md`](docs/coverage-baseline.md) | Reviewers, CI | Per-package coverage thresholds + the baseline snapshot. |
+| [`docs/deployment-verification.md`](docs/deployment-verification.md) | Reviewers | § 9.2.1 docker-stack verification + brief's § 7 E2E through the running stack. |
+| [`docs/submission-message.md`](docs/submission-message.md) | Submission | § 19 sharing checklist + § 20 submission message. |
 
 ---
 
