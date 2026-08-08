@@ -5,6 +5,12 @@ by a ``threading.Lock`` so concurrent FastAPI requests don't
 race. The ticket ids are allocated by the store, not by the
 caller — the brief's contract is "service allocates the id".
 
+Feature 6.2 adds an audit list alongside the ticket list. Every
+successful ticket creation appends an :class:`AuditEntry` so a
+reviewer can prove the write was sanctioned. The audit list is
+in-memory (consistent with the ticket store); persistent audit
+log is a future story.
+
 Why a small static seed
 ------------------------
 
@@ -18,9 +24,10 @@ sees in the E2E acceptance scenario.
 from __future__ import annotations
 
 import threading
+import uuid
 from datetime import UTC, datetime
 
-from .models import Ticket
+from .models import AuditEntry, Ticket
 
 
 class TicketStore:
@@ -35,6 +42,10 @@ class TicketStore:
         # already covers up to ``TKT-1410``, so the counter
         # starts at 2000 and grows monotonically.
         self._next_id_offset = 2000
+        # In-memory audit list (Feature 6.2). Append-only;
+        # ``list_audit`` returns a copy under the lock so callers
+        # can't mutate the store's view.
+        self._audit: list[AuditEntry] = []
 
     # ---- read ----
 
@@ -46,6 +57,17 @@ class TicketStore:
         with self._lock:
             return self._tickets.get(ticket_id)
 
+    def list_audit(self) -> list[AuditEntry]:
+        """Return a snapshot of the audit list.
+
+        The list is bounded by the store's lifetime; a long-running
+        process will accumulate rows. The audit endpoint accepts a
+        ``limit`` query parameter so the GUI can page through the
+        log without copying the whole list.
+        """
+        with self._lock:
+            return list(self._audit)
+
     # ---- write ----
 
     def create(self, ticket: Ticket) -> Ticket:
@@ -53,6 +75,32 @@ class TicketStore:
         with self._lock:
             self._tickets[ticket.id] = ticket
             return ticket
+
+    def append_audit(
+        self,
+        *,
+        ticket_id: str,
+        request_id: str,
+        approved_by: str,
+        approved_at: datetime,
+        incident_id: str | None,
+    ) -> AuditEntry:
+        """Append an :class:`AuditEntry` for a successful creation.
+
+        The store allocates the ``id`` (uuid4 hex) so the caller
+        doesn't have to. Thread-safe via ``self._lock``.
+        """
+        entry = AuditEntry(
+            id=uuid.uuid4().hex,
+            ticket_id=ticket_id,
+            request_id=request_id,
+            approved_by=approved_by,
+            approved_at=approved_at,
+            incident_id=incident_id,
+        )
+        with self._lock:
+            self._audit.append(entry)
+        return entry
 
     def next_id(self) -> str:
         """Allocate a fresh ticket id deterministically per call.

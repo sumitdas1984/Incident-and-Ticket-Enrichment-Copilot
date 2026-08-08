@@ -178,6 +178,27 @@ class ChainRunner:
                             server="ticketing",
                             client=self._ticket_mcp,
                         )
+                        # Feature 6.2 — surface the approval metadata
+                        # at the top of the trace output. The
+                        # ticket-mock returns an ``approval`` block
+                        # (Feature 6.2 audit envelope) inside the
+                        # structured content; lifting
+                        # ``approved_by`` and ``request_id`` to the
+                        # top makes the trace self-explanatory and
+                        # gives the reviewer a single place to
+                        # confirm "this write was sanctioned".
+                        if (
+                            output is not None
+                            and isinstance(output, dict)
+                            and ts.outcome == "success"
+                        ):
+                            approval = output.get("approval")
+                            if isinstance(approval, dict):
+                                enriched = dict(output)
+                                enriched["approved_by"] = approval.get("approved_by")
+                                enriched["request_id"] = approval.get("request_id")
+                                ts = ts.model_copy(update={"output": enriched})
+                                output = enriched
                     prior_outputs[step.step_id] = output
                     trace.append(ts)
                 elif step.kind == PlanStepKind.RAG_QUERY:

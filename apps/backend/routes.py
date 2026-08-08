@@ -174,13 +174,23 @@ async def ticket_draft(req: TicketDraftRequest, request: Request) -> TicketDraft
 
         # The chain captured the ticket-mock's response in
         # ``prior_outputs["t1"]``. The response shape is
-        # {title, body, severity, assignee, labels, ticket_id, preview}.
+        # {title, body, severity, assignee, labels, ticket_id, preview,
+        #  approval: {approved_by, approved_at, request_id}}.
         draft = result.prior_outputs.get("t1") or {}
         if not isinstance(draft, dict):
             raise HTTPException(
                 status_code=502,
                 detail={"code": "ticket_draft_failed", "message": "No ticket draft returned"},
             )
+
+        # Feature 6.2 — pull the approval block off the draft so the
+        # GUI can render "approved by … at …" alongside the ticket
+        # id. The trace already carries the same fields; we surface
+        # them on the response envelope so a reviewer reading the
+        # body has the audit trail in one place.
+        approval_block = draft.get("approval")
+        if not isinstance(approval_block, dict):
+            approval_block = None
 
         bundle.conversation_store.append(
             history.id,
@@ -205,6 +215,7 @@ async def ticket_draft(req: TicketDraftRequest, request: Request) -> TicketDraft
             labels=list(draft.get("labels") or []),
             ticket_id=draft.get("ticket_id"),
             preview=bool(draft.get("preview", True)),
+            approval=approval_block,
             trace=result.trace,
         )
     except MCPError as exc:
