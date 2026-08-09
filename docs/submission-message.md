@@ -139,11 +139,11 @@ The text below is the message to send when the submission is
 ready. Copy-paste ready.
 
 ```
-Subject: Incident-and-Ticket-Enrichment-Copilot — round-1 submission
+Subject: Incident-and-Ticket-Enrichment-Copilot — submission
 
 Hi,
 
-Round-1 of the Incident-and-Ticket-Enrichment-Copilot assignment is
+The Incident-and-Ticket-Enrichment-Copilot assignment is
 ready for evaluation. The work is on the `main` branch at
 https://github.com/sumitdas1984/Incident-and-Ticket-Enrichment-Copilot.
 
@@ -157,9 +157,8 @@ Repository highlights
 * 88 % coverage overall; every package at or above its baseline
   threshold (see `docs/coverage-baseline.md`).
 * CI green on every push; latest successful run: 31258536938.
-* A 3:40 demo video walking through all five screens is
-  uploaded to OneDrive and linked from the README:
-  <https://1drv.ms/v/c/c68ba60bd1f54a88/IQCuXHQ3CNewTrJ1r6bmqSfVAeHkHT9fRVum4hWdQnYyRVo?e=H1C7Pe>
+* A demo video walking through all five screens is
+  uploaded to OneDrive and linked from the README.
 
 How to run it
 -------------
@@ -198,17 +197,6 @@ What's there
   record (Service health + brief's § 7 E2E through the stack).
 * `docs/submission-message.md` — this file.
 
-What's deferred
----------------
-
-* Story 9.2.2 (demo screenshots) was skipped per the timebox —
-  the expected PNGs are committed to `docs/screenshots/` but the
-  final five-frame capture is left to the operator once the
-  docker stack is running locally. The architecture diagram and
-  the README's sample-interactions section cover the same
-  surface.
-* The demo video (Story 9.2.3) is **complete** — see the
-  highlight above and the link in the README.
 
 Hard constraints
 ----------------
