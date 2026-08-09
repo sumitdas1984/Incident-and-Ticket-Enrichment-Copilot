@@ -361,7 +361,7 @@ def _latest_assistant_message(messages: list[dict[str, Any]]) -> dict[str, Any] 
 
 
 def render_sidebar() -> None:
-    """Left-rail sidebar with example prompts + config readout."""
+    """Left-rail sidebar with the copilot brand block + example prompts."""
     with st.sidebar:
         st.markdown(render_section("Copilot", icon="🚨"), unsafe_allow_html=True)
         st.caption("Industrial incident + RAG copilot.")
@@ -380,20 +380,6 @@ def render_sidebar() -> None:
                 )
                 st.session_state[_SESSION_PENDING] = True
                 st.rerun()
-
-        st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-
-        client = get_client()
-        st.markdown(render_section("Backend", icon="🔌"), unsafe_allow_html=True)
-        st.markdown(
-            render_kv("Chat", client.base_url),
-            unsafe_allow_html=True,
-        )
-        ticket_client = get_ticket_client()
-        st.markdown(
-            render_kv("Tickets", ticket_client.base_url),
-            unsafe_allow_html=True,
-        )
 
 
 # --------------------------------------------------------------------------- #
