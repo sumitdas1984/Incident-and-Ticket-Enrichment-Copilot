@@ -110,15 +110,18 @@ directly — it goes through `MCPClient`.
 
 ### 1.7 Demo screenshots + video linked from README
 
-**Status:** ⚠️ DEFERRED.
+**Status:** ✅ PARTIAL — screenshots directory created, video skip retained.
 
-Per the user's explicit instruction when starting Feature 9.2 —
-Stories 9.2.2 (screenshots) and 9.2.3 (demo video) are **skipped**.
-The README's `## Documentation index` section lists the 8
-`docs/` files that cover the same surface: the architecture
-diagram in `docs/architecture-diagram.png` substitutes for a
-screenshot, and the README's `Sample interactions` section
-substitutes for a video walkthrough.
+A `docs/screenshots/` directory is in place with a `README.md`
+documenting the expected filenames (`01-empty-state.png` through
+`05-ticket-created.png`). The brief's § 18 placeholder
+(`<Location of screenshots or recording>`) is filled by
+`docs/screenshots/`. The operator captures the five PNGs locally
+with the docker stack running and drops them in.
+
+Story 9.2.3 (demo video) is **skipped** per the user's explicit
+instruction when starting Feature 9.2. The README's architecture
+diagram and sample-interactions section cover the same surface.
 
 This is a deliberate scope cut documented above; submission goes
 out without the visual evidence.
