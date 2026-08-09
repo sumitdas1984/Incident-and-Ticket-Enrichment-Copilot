@@ -9,24 +9,26 @@ What we assert:
 
 * ``AppTest`` boots the script without raising (the
   ``set_page_config`` call, session-state init, and the
-  ``st.title`` all run).
-* The empty-state info callout is present on first load.
+  ``render_app_bar`` / theme-injection all run).
+* The empty-state copy renders on first load.
 * Submitting a message via the chat input appends a user
   turn and then an assistant turn after ``render_input``
   calls :meth:`ChatClient.send`.
 * A failing client surfaces an assistant turn whose content
   includes the error code.
 
+The UI renders cards via ``st.markdown(unsafe_allow_html=True)``
+(not via ``st.info`` / ``st.expander``), so the assertions grep
+the rendered HTML inside ``at.markdown``.
+
 Note on patching
 ----------------
 
 The UI module imports ``build_default_client`` by name into its
-own namespace (``from apps.frontend.chat_client import ...
-build_default_client``), so patching
-``chat_client.build_default_client`` later doesn't affect what
-the UI calls. We use :func:`unittest.mock.patch.object` against
-the ``ui`` module's local binding (``apps.frontend.ui.build_default_client``)
-instead — that reference is what the UI actually invokes.
+own namespace, so patching ``chat_client.build_default_client``
+later doesn't affect what the UI calls. We inject the stub
+directly into ``st.session_state`` after the first ``AppTest.run()``
+so the rerun picks it up.
 """
 from __future__ import annotations
 
@@ -43,11 +45,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _UI_SCRIPT = _REPO_ROOT / "apps" / "frontend" / "ui.py"
 
 
+def _all_markdown(at: AppTest) -> str:
+    """Concatenate every markdown block into one searchable string."""
+    return "\n".join(m.value for m in at.markdown)
+
+
 def test_app_boots_and_shows_empty_state() -> None:
-    """First load renders the suggested-prompt info callout."""
-    # Inject a safe stub client into session_state so ``get_client``
-    # never consults ``build_default_client`` and no real HTTP call
-    # happens. The first run is just a render check.
+    """First load renders the empty-state copy in the chat column."""
     safe = ChatClient(base_url="http://test")
     at = AppTest.from_file(str(_UI_SCRIPT)).run()
     at.session_state["client"] = safe
@@ -55,15 +59,15 @@ def test_app_boots_and_shows_empty_state() -> None:
     at.run()
 
     assert not at.exception
-    # The empty-state copy mentions the suggested prompt.
-    info_bodies = " ".join(info.value for info in at.info)
-    assert "Investigate recurring" in info_bodies
-    # The title is the page heading.
-    titles = [t.value for t in at.title]
-    assert any("Incident Copilot" in t for t in titles)
-    # Feature 7.2 — the workspace column header is present.
-    subheaders = [s.value for s in at.subheader]
-    assert any("Workspace" in s for s in subheaders)
+    # The chat column's empty state copy mentions the suggested prompts.
+    joined = _all_markdown(at)
+    assert "Start a conversation" in joined
+    # The sidebar's example prompts appear as buttons (Streamlit's
+    # ``st.button`` labels are visible in the page DOM).
+    sidebar_button_labels = [b.label for b in at.button]
+    assert any("Investigate recurring high-severity alarms" in label for label in sidebar_button_labels)
+    # The workspace column's empty state copy is present.
+    assert "Workspace empty" in joined
 
 
 def test_submit_message_appends_user_and_assistant_turns() -> None:
@@ -71,9 +75,6 @@ def test_submit_message_appends_user_and_assistant_turns() -> None:
 
     class _StubClient(ChatClient):
         def __init__(self) -> None:  # type: ignore[no-super-call]
-            # Skip parent init — no real httpx.Client. The ``base_url``
-            # property reads ``self._base_url``; set it directly so
-            # ``st.caption(f"Backend: {client.base_url}")`` renders.
             self._base_url = "http://stub"
 
         def send(self, *, message: str, conversation_id: str | None = None, trace_id: str | None = None) -> ChatResponse:
@@ -111,25 +112,20 @@ def test_submit_message_appends_user_and_assistant_turns() -> None:
 
     stub = _StubClient()
     at = AppTest.from_file(str(_UI_SCRIPT)).run()
-
-    # Inject the stub directly into session_state and clear any
-    # previously cached client. ``get_client`` consults this cache
-    # before calling ``build_default_client``; setting it here
-    # sidesteps module-level patching entirely (which doesn't
-    # always reach Streamlit's worker thread cleanly).
     at.session_state["client"] = stub
     assert len(at.chat_input) == 1
     at.chat_input[0].set_value("Investigate boiler B-101").run()
+    at.session_state["client"] = stub  # cached client survives the rerun
 
-    # After the rerun, the assistant message should be rendered.
-    markdown_blocks = [m.value for m in at.markdown]
-    joined = "\n".join(markdown_blocks)
+    joined = _all_markdown(at)
     assert "You said: Investigate boiler B-101" in joined
-    # The expanders for citations / trace / incident exist.
-    expander_labels = [e.label for e in at.expander]
-    assert any("Citations" in label for label in expander_labels)
-    assert any("MCP execution trace" in label for label in expander_labels)
-    assert any("Incident" in label for label in expander_labels)
+    # The assistant message card carries the citation + trace
+    # count pills (rendered via the theme).
+    assert "1 citation" in joined
+    assert "1 step" in joined
+    # The structured Incident card surfaces under the assistant turn.
+    assert "Structured Incident" in joined
+    assert "Severity" in joined
 
 
 def test_submit_message_with_backend_error_renders_assistant_error() -> None:
@@ -137,9 +133,6 @@ def test_submit_message_with_backend_error_renders_assistant_error() -> None:
 
     class _FailingClient(ChatClient):
         def __init__(self) -> None:  # type: ignore[no-super-call]
-            # ``base_url`` reads ``self._base_url``; set it directly so
-            # the UI's caption renders. See the matching note in
-            # ``_StubClient``.
             self._base_url = "http://stub"
 
         def send(self, *, message: str, conversation_id: str | None = None, trace_id: str | None = None) -> ChatResponse:
@@ -150,16 +143,9 @@ def test_submit_message_with_backend_error_renders_assistant_error() -> None:
 
     failing = _FailingClient()
     at = AppTest.from_file(str(_UI_SCRIPT)).run()
-
-    # Inject the failing client into session_state so the rerun
-    # surfaces its exception. See the matching comment in
-    # ``test_submit_message_appends_user_and_assistant_turns``.
     at.session_state["client"] = failing
     at.chat_input[0].set_value("anything").run()
+    at.session_state["client"] = failing  # cached client survives the rerun
 
-    markdown_blocks = [m.value for m in at.markdown]
-    joined = "\n".join(markdown_blocks)
+    joined = _all_markdown(at)
     assert "backend_unreachable" in joined
-    # The error panel at the top is also rendered via ``st.error``.
-    error_bodies = " ".join(e.value for e in at.error)
-    assert "backend_unreachable" in error_bodies

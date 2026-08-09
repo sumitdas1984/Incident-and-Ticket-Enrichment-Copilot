@@ -83,12 +83,14 @@ def test_workspace_empty_state_renders_hint() -> None:
     # Inject the stub so the workspace caption renders without
     # an HTTP call.
     at.session_state["ticket_client"] = _stub_ticket_client()
+    at.session_state["client"] = _stub_ticket_client()
     at.run()
 
     assert not at.exception
-    # The workspace empty-state hint mentions the suggested action.
-    info_bodies = " ".join(info.value for info in at.info)
-    assert "Ask the copilot a question" in info_bodies
+    # The workspace empty-state hint is rendered via the theme
+    # (markdown block) — not via ``st.info``.
+    joined = "\n".join(m.value for m in at.markdown)
+    assert "Workspace empty" in joined
     # The "Create ticket" button is rendered, disabled (no incident).
     button_block = next((b for b in at.button if b.label == "🛡 Create ticket"), None)
     assert button_block is not None
@@ -102,6 +104,7 @@ def test_workspace_renders_panels_for_latest_turn() -> None:
     # has something to render.
     at = AppTest.from_file(str(_UI_SCRIPT)).run()
     at.session_state["ticket_client"] = _stub_ticket_client()
+    at.session_state["client"] = _stub_ticket_client()
     at.session_state["messages"] = [
         {
             "role": "user",
@@ -153,8 +156,7 @@ def test_workspace_renders_panels_for_latest_turn() -> None:
     at.run()
 
     # The workspace panels render the incident's fields.
-    markdown_blocks = [m.value for m in at.markdown]
-    joined = "\n".join(markdown_blocks)
+    joined = "\n".join(m.value for m in at.markdown)
     assert "Boiler B-101 tube leak suspect" in joined
     assert "EastRefinery" in joined
     assert "Reduce feed rate" in joined
@@ -163,6 +165,8 @@ def test_workspace_renders_panels_for_latest_turn() -> None:
     assert "boiler-tube-leak" in joined
     # Trace panel renders the tool invocation.
     assert "list_alarms" in joined
+    # The error-state copy from the empty state is NOT present.
+    assert "Workspace empty" not in joined
 
 
 def test_workspace_create_ticket_button_enabled_when_incident_present() -> None:
@@ -170,6 +174,7 @@ def test_workspace_create_ticket_button_enabled_when_incident_present() -> None:
     has an incident to draft from."""
     at = AppTest.from_file(str(_UI_SCRIPT)).run()
     at.session_state["ticket_client"] = _stub_ticket_client()
+    at.session_state["client"] = _stub_ticket_client()
     at.session_state["messages"] = [
         _assistant_message_with_incident(),
     ]
@@ -183,22 +188,21 @@ def test_workspace_create_ticket_button_enabled_when_incident_present() -> None:
 def test_workspace_renders_loading_skeleton_when_pending() -> None:
     """``st.session_state['pending']=True`` causes the workspace
     to render the loading state (Story 7.2.3) rather than the
-    panels. Streamlit's ``AppTest`` (1.61) does not expose
-    ``st.skeleton`` as a queryable attribute, so we assert that
-    the script ran without exception and the panels are absent
-    (the empty-state ``st.info`` is replaced by the skeleton
-    view)."""
+    panels. The render is a markdown block (the new theme); the
+    indicator is the absence of the empty-state hint and the
+    presence of the "Investigating…" title."""
     at = AppTest.from_file(str(_UI_SCRIPT))
     at.session_state["ticket_client"] = _stub_ticket_client()
+    at.session_state["client"] = _stub_ticket_client()
     at.session_state["pending"] = True
     at.run()
 
     assert not at.exception
-    # In the pending state the empty-state ``st.info`` is replaced
-    # by skeletons — the workspace's primary hint callout is
-    # absent.
-    info_bodies = " ".join(info.value for info in at.info)
-    assert "Ask the copilot a question" not in info_bodies
+    joined = "\n".join(m.value for m in at.markdown)
+    # In the pending state the empty-state hint is replaced by
+    # the loading skeleton.
+    assert "Workspace empty" not in joined
+    assert "Investigating" in joined or "Connect" in joined
 
 
 def _assistant_message_with_incident() -> dict:
