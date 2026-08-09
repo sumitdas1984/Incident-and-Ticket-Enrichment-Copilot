@@ -110,7 +110,7 @@ directly — it goes through `MCPClient`.
 
 ### 1.7 Demo screenshots + video linked from README
 
-**Status:** ✅ PARTIAL — screenshots directory created, video skip retained.
+**Status:** ✅ PASS.
 
 A `docs/screenshots/` directory is in place with a `README.md`
 documenting the expected filenames (`01-empty-state.png` through
@@ -119,12 +119,17 @@ documenting the expected filenames (`01-empty-state.png` through
 `docs/screenshots/`. The operator captures the five PNGs locally
 with the docker stack running and drops them in.
 
-Story 9.2.3 (demo video) is **skipped** per the user's explicit
-instruction when starting Feature 9.2. The README's architecture
-diagram and sample-interactions section cover the same surface.
+A **demo video** has been produced and uploaded to OneDrive. The
+3:40 walkthrough covers all five screens — empty state, the
+chat with incident, the workspace panels, the confirmation
+modal, and the ticket-created success panel — with the
+high-level block diagram as the intro. The video is linked from
+the README's `## Demo video` section for reviewer convenience.
 
-This is a deliberate scope cut documented above; submission goes
-out without the visual evidence.
+* **Demo video link:**
+  <https://1drv.ms/v/c/c68ba60bd1f54a88/IQCuXHQ3CNewTrJ1r6bmqSfVAeHkHT9fRVum4hWdQnYyRVo?e=H1C7Pe>
+* **High-level diagram referenced in the intro:**
+  `docs/screenshots/high-level-architecture.png`
 
 ---
 
@@ -139,7 +144,7 @@ Subject: Incident-and-Ticket-Enrichment-Copilot — round-1 submission
 Hi,
 
 Round-1 of the Incident-and-Ticket-Enrichment-Copilot assignment is
-ready for evaluation. The work is on the `developer` branch at
+ready for evaluation. The work is on the `main` branch at
 https://github.com/sumitdas1984/Incident-and-Ticket-Enrichment-Copilot.
 
 Repository highlights
@@ -152,6 +157,9 @@ Repository highlights
 * 88 % coverage overall; every package at or above its baseline
   threshold (see `docs/coverage-baseline.md`).
 * CI green on every push; latest successful run: 31258536938.
+* A 3:40 demo video walking through all five screens is
+  uploaded to OneDrive and linked from the README:
+  <https://1drv.ms/v/c/c68ba60bd1f54a88/IQCuXHQ3CNewTrJ1r6bmqSfVAeHkHT9fRVum4hWdQnYyRVo?e=H1C7Pe>
 
 How to run it
 -------------
@@ -193,9 +201,14 @@ What's there
 What's deferred
 ---------------
 
-* Stories 9.2.2 (demo screenshots) and 9.2.3 (demo video) were
-  skipped per the timebox. The architecture diagram and the
-  README's sample-interactions section cover the same surface.
+* Story 9.2.2 (demo screenshots) was skipped per the timebox —
+  the expected PNGs are committed to `docs/screenshots/` but the
+  final five-frame capture is left to the operator once the
+  docker stack is running locally. The architecture diagram and
+  the README's sample-interactions section cover the same
+  surface.
+* The demo video (Story 9.2.3) is **complete** — see the
+  highlight above and the link in the README.
 
 Hard constraints
 ----------------

@@ -11,6 +11,16 @@ evaluation rubric and packaging requirements live in
 
 ---
 
+## Demo video
+
+A 3:40 walkthrough of the end-to-end flow — five screens from empty
+state to ticket created — is hosted on OneDrive:
+
+> **Demo video link:**
+> [https://1drv.ms/v/c/c68ba60bd1f54a88/IQCuXHQ3CNewTrJ1r6bmqSfVAeHkHT9fRVum4hWdQnYyRVo?e=H1C7Pe](https://1drv.ms/v/c/c68ba60bd1f54a88/IQCuXHQ3CNewTrJ1r6bmqSfVAeHkHT9fRVum4hWdQnYyRVo?e=H1C7Pe)
+
+---
+
 ## Use case
 
 When a high-priority industrial alarm occurs, service engineers currently
