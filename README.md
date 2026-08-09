@@ -305,6 +305,7 @@ curl -sX POST http://localhost:8001/tickets/draft \
 | [`docs/coverage-baseline.md`](docs/coverage-baseline.md) | Reviewers, CI | Per-package coverage thresholds + the baseline snapshot. |
 | [`docs/deployment-verification.md`](docs/deployment-verification.md) | Reviewers | § 9.2.1 docker-stack verification + brief's § 7 E2E through the running stack. |
 | [`docs/submission-message.md`](docs/submission-message.md) | Submission | § 19 sharing checklist + § 20 submission message. |
+| [`docs/screenshots/`](docs/screenshots/) | Reviewers | Demo screenshots (paths from the brief's § 18 placeholder). |
 
 ---
 
