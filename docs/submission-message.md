@@ -231,11 +231,11 @@ Sumit
 
 ## 3. Cross-references
 
-- **Architecture walkthrough:** [`docs/architecture.md`](docs/architecture.md)
-- **MCP tool catalog:** [`docs/mcp-tool-catalog.md`](docs/mcp-tool-catalog.md)
-- **RAG design:** [`docs/rag-design.md`](docs/rag-design.md)
-- **API integration:** [`docs/api-integration.md`](docs/api-integration.md)
-- **Design decisions:** [`docs/design-decisions.md`](docs/design-decisions.md)
-- **Known limitations:** [`docs/known-limitations.md`](docs/known-limitations.md)
-- **Coverage baseline:** [`docs/coverage-baseline.md`](docs/coverage-baseline.md)
-- **Deployment verification:** [`docs/deployment-verification.md`](docs/deployment-verification.md)
+- **Architecture walkthrough:** [`architecture.md`](architecture.md)
+- **MCP tool catalog:** [`mcp-tool-catalog.md`](mcp-tool-catalog.md)
+- **RAG design:** [`rag-design.md`](rag-design.md)
+- **API integration:** [`api-integration.md`](api-integration.md)
+- **Design decisions:** [`design-decisions.md`](design-decisions.md)
+- **Known limitations:** [`known-limitations.md`](known-limitations.md)
+- **Coverage baseline:** [`coverage-baseline.md`](coverage-baseline.md)
+- **Deployment verification:** [`deployment-verification.md`](deployment-verification.md)
