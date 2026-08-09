@@ -1,0 +1,174 @@
+name: incident-and-ticket-enrichment-copilot
+
+services:
+  alarm-api:
+    build:
+      context: .
+      args:
+        MODULE_PATH: connectors.alarm_api
+    container_name: alarm-api
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${ALARM_API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      args:
+        MODULE_PATH: mcp_servers.alarm_management
+    container_name: mcp-server
+    depends_on:
+      alarm-api:
+        condition: service_healthy
+    environment:
+      # Override .env's host URL with the docker-network URL so
+      # the alarm-management MCP can reach the alarm-api service.
+      ALARM_API_BASE_URL: http://alarm-api:8000
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${MCP_SERVER_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  copilot-backend:
+    build:
+      context: .
+      args:
+        MODULE_PATH: apps.backend
+    container_name: copilot-backend
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+      ticketing-mcp:
+        condition: service_healthy
+    environment:
+      # Override .env's host URLs with docker-network URLs so the
+      # orchestrator's MCP clients reach the right services.
+      ALARM_API_BASE_URL: http://alarm-api:8000
+      MCP_SERVER_URL: http://mcp-server:9000
+      TICKETING_MCP_URL: http://ticketing-mcp:9001
+      TICKETING_API_URL: http://ticket-mock:8000
+      VECTOR_STORE_URL: http://vector-store:8000
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      args:
+        MODULE_PATH: apps.frontend
+    container_name: frontend
+    depends_on:
+      copilot-backend:
+        condition: service_healthy
+    environment:
+      # Override .env's host URL with the docker-network URL so
+      # the in-container Streamlit GUI reaches the copilot-backend
+      # over the compose network (Feature 7.1, Story 7.1.2).
+      COPILOT_BACKEND_URL: http://copilot-backend:8000
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    healthcheck:
+      # Streamlit serves an unauthenticated liveness endpoint at
+      # ``/_stcore/health`` once the script boots. The earlier
+      # ``/health`` path belonged to the FastAPI placeholder stub
+      # which Feature 7.1 replaced with the real GUI.
+      test: ["CMD", "curl", "-f", "http://localhost:5173/_stcore/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  vector-store:
+    image: chromadb/chroma:latest
+    container_name: vector-store
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./.chroma:/chroma/chroma
+    ports:
+      - "${VECTOR_STORE_PORT:-8002}:8000"
+    healthcheck:
+      # The chromadb/chroma image does not ship curl, wget, python,
+      # or any other HTTP client — only busybox-ish coreutils. We
+      # fall back to a bash /dev/tcp port-open check (Chroma's HTTP
+      # listener is on :8000). The default /bin/sh is dash which
+      # does not support /dev/tcp; we invoke bash explicitly. The
+      # full v2 /heartbeat endpoint is validated by the
+      # orchestrator's wiring on first request.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8000 && exec 3<&- && exec 3>&- && exit 0 || exit 1'"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  ticket-mock:
+    build:
+      context: .
+      args:
+        MODULE_PATH: connectors.ticket_mock
+    container_name: ticket-mock
+    environment:
+      # Override .env's host URL with the docker-network URL so
+      # the ticketing MCP can reach the ticket-mock service.
+      TICKETING_API_URL: http://ticket-mock:8000
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${TICKETING_API_PORT:-8003}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Ticketing MCP server (Feature 6.1) — the orchestrator's
+  # ``TICKETING_MCP_URL`` points here, so the copilot backend
+  # depends on this service being healthy.
+  ticketing-mcp:
+    build:
+      context: .
+      args:
+        MODULE_PATH: mcp_servers.ticketing
+    container_name: ticketing-mcp
+    depends_on:
+      ticket-mock:
+        condition: service_healthy
+    environment:
+      # Override .env's host URL with the docker-network URL so
+      # the ticketing MCP can reach the ticket-mock service.
+      TICKETING_API_URL: http://ticket-mock:8000
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${TICKETING_MCP_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

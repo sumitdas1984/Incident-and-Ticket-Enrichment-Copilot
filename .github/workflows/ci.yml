@@ -1,0 +1,85 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  basic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync
+      - run: uv run ruff check .
+      # ``mypy apps rag connectors core`` invokes mypy with the
+      # four directories as paths. That causes mypy to discover
+      # ``rag/ingestion/__init__.py`` both as a top-level
+      # ``ingestion`` module and as ``rag.ingestion``, producing
+      # ``Source file found twice under different module names``
+      # and aborting the check.
+      #
+      # ``--explicit-package-bases`` tells mypy to map ``rag``
+      # onto the ``rag`` package and ``connectors`` / ``core``
+      # onto themselves; ``apps`` is treated as a path because
+      # its sub-packages (``backend`` / ``frontend``) are
+      # discoverable without an ``apps/__init__.py``.
+      - run: uv run mypy --explicit-package-bases apps rag connectors core
+      - name: Disallow os.getenv outside core/
+        # Per Feature 1.2's contract, configuration is loaded once via
+        # core.config.get_settings(). Anywhere else is a layering
+        # violation.
+        run: |
+          if grep -rn 'os\.getenv' apps/ mcp-servers/ rag/ connectors/ tests/ 2>/dev/null; then
+            echo "os.getenv is only allowed inside core/config.py" >&2
+            exit 1
+          fi
+      - name: Run pytest (treat "no tests collected" as success)
+        # Pytest exits with code 5 when it finds zero tests. Treat that as
+        # a green CI run (Feature 1.1 is scaffolding only; real tests
+        # land in Epic 8). Every other non-zero exit code propagates
+        # so real test failures still fail the job.
+        #
+        # ``-m "not slow_embeddings"`` excludes the
+        # ``test_sentence_transformer_embedder_shape`` test, which
+        # downloads ``sentence-transformers/all-MiniLM-L6-v2`` from
+        # Hugging Face Hub on first run. HF rate-limits the runner,
+        # causing flaky 429s. The test is for local development;
+        # run ``uv run pytest -m slow_embeddings`` to exercise it
+        # against a cached model.
+        #
+        # ``--cov`` flags generate a coverage report (Feature 8.1,
+        # Story 8.1.1 acceptance: coverage ≥ 80 % on core packages).
+        # The committed baseline lives in ``docs/coverage-baseline.md``.
+        run: |
+          set +e
+          uv run pytest -ra -m "not slow_embeddings" \
+            --cov=apps \
+            --cov=rag \
+            --cov=connectors \
+            --cov=mcp_servers \
+            --cov=core
+          EXIT_CODE=$?
+          set -e
+          if [ "$EXIT_CODE" -eq 5 ]; then
+            echo "No tests were collected; treating as success."
+            exit 0
+          fi
+          exit "$EXIT_CODE"
+      - name: Prepare coverage artifact
+        if: always()
+        # ``|| true`` so a missing .coverage file doesn't fail the build.
+        # The artifact upload below is also gated by ``if-no-files-found: ignore``.
+        run: |
+          mkdir -p coverage-artifact
+          if [ -f .coverage ]; then
+            cp .coverage coverage-artifact/coverage.data
+          fi
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data
+          path: coverage-artifact/
+          if-no-files-found: ignore
+          retention-days: 7

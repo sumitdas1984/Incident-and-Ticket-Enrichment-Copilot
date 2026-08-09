@@ -1,0 +1,13 @@
+{
+  "name": "incident-and-ticket-enrichment-copilot-validate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Newman runner for the Alarm API simulator Postman collections. Installed only by `make validate-api` (or `npm install`). Not part of the runtime.",
+  "scripts": {
+    "validate-api": "echo 'Use: make validate-api'"
+  },
+  "devDependencies": {
+    "newman": "^6.1.0",
+    "newman-reporter-htmlextra": "^1.22.11"
+  }
+}
