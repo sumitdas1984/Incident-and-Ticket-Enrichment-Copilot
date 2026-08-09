@@ -35,3 +35,10 @@ deployed UI.
 The brief's § 18 demo evidence ends here. For a 10-minute walk
 video, record `screen` while running the demo and link it
 from `README.md` (Story 9.2.3 — not implemented in this repo).
+
+## Notes
+
+* After the `feat(frontend): polished UI` PR lands, the app bar's
+  title is centered. Re-capture `01-empty-state.png` to reflect
+  the new layout if you want the screenshot to match the
+  deployed UI.

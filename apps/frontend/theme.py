@@ -276,17 +276,21 @@ GLOBAL_CSS: Final = f"""
 .app-bar .app-bar-icon {{
     font-size: 1.6rem;
     line-height: 1;
+    flex: 0 0 auto;
 }}
 .app-bar .app-bar-title {{
+    flex: 1 1 auto;
+    text-align: center;
     font-size: 1.05rem;
     font-weight: 700;
     color: {TEXT};
+    letter-spacing: 0.01em;
 }}
-.app-bar .app-bar-spacer {{ flex: 1; }}
 .app-bar .app-bar-meta {{
     color: {TEXT_MUTED};
     font-size: 0.78rem;
     font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+    flex: 0 0 auto;
 }}
 
 /* ---------- Empty state ---------- */
@@ -524,14 +528,23 @@ def rag_confidence_pill(confidence: str) -> str:
 
 
 def render_app_bar(backend_url: str) -> str:
-    """Render the top app bar with backend URL badge."""
+    """Render the top app bar with a centered title.
+
+    Three-column flex layout: brand icon on the left, centered
+    title in the middle (flex-grows to fill the available
+    space), backend URL + pill on the right. The middle cell's
+    ``text-align: center`` plus ``flex: 1 1 auto`` is what makes
+    the title sit visually centered even when the side cells
+    have different widths.
+    """
     return (
         f"<div class='app-bar'>"
         f"<span class='app-bar-icon'>🚨</span>"
         f"<span class='app-bar-title'>Incident Copilot</span>"
-        f"<span class='app-bar-spacer'></span>"
-        f"<span class='pill pill-info'>backend</span>"
-        f"<span class='app-bar-meta'>{escape(backend_url)}</span>"
+        f"<span class='app-bar-meta'>"
+        f"<span class='pill pill-info'>backend</span> "
+        f"<code>{escape(backend_url)}</code>"
+        f"</span>"
         f"</div>"
     )
 
