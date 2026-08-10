@@ -45,7 +45,6 @@ from apps.frontend.theme import (
     render_app_bar,
     render_assistant_message,
     render_card,
-    render_chat_skeleton,
     render_citation_card,
     render_empty_state,
     render_kv,
@@ -89,7 +88,6 @@ _SESSION_MESSAGES = "messages"
 _SESSION_CLIENT = "client"
 _SESSION_TICKET_CLIENT = "ticket_client"
 _SESSION_LAST_ERROR = "last_error"
-_SESSION_PENDING = "pending"
 _SESSION_TICKET_MODAL = "ticket_modal"
 _SESSION_TICKET_RESULT = "ticket_result"
 
@@ -100,8 +98,6 @@ def _init_session_state() -> None:
         st.session_state[_SESSION_MESSAGES] = []
     if _SESSION_LAST_ERROR not in st.session_state:
         st.session_state[_SESSION_LAST_ERROR] = None
-    if _SESSION_PENDING not in st.session_state:
-        st.session_state[_SESSION_PENDING] = False
     if _SESSION_TICKET_MODAL not in st.session_state:
         st.session_state[_SESSION_TICKET_MODAL] = None
     if _SESSION_TICKET_RESULT not in st.session_state:
@@ -262,7 +258,15 @@ def render_input(client: ChatClient) -> None:
     prompt = st.chat_input("Ask the copilot…")
     if not prompt:
         return
+    _dispatch_user_message(prompt, client)
 
+
+def _dispatch_user_message(prompt: str, client: ChatClient) -> None:
+    """Append the user message, call the backend, append the assistant
+    reply, and rerun. Used by both ``render_input`` (chat box) and the
+    sidebar's suggested-prompt buttons — keeping a single code path so
+    the spinner always reflects an actual ``/chat`` call.
+    """
     history: list[dict[str, Any]] = st.session_state[_SESSION_MESSAGES]
     conversation_id = _latest_conversation_id(history)
 
@@ -360,7 +364,7 @@ def _latest_assistant_message(messages: list[dict[str, Any]]) -> dict[str, Any] 
 # --------------------------------------------------------------------------- #
 
 
-def render_sidebar() -> None:
+def render_sidebar(client: ChatClient) -> None:
     """Left-rail sidebar with the copilot brand block + example prompts."""
     with st.sidebar:
         st.markdown(render_section("Copilot", icon="🚨"), unsafe_allow_html=True)
@@ -370,16 +374,7 @@ def render_sidebar() -> None:
         st.markdown(render_section("Try asking", icon="💡"), unsafe_allow_html=True)
         for prompt in _SUGGESTED_PROMPTS:
             if st.button(prompt, key=f"suggest::{prompt}", help="Click to ask"):
-                history = st.session_state[_SESSION_MESSAGES]
-                history.append(
-                    {
-                        "role": "user",
-                        "content": prompt,
-                        "timestamp": _dt.datetime.now(_dt.UTC).isoformat(),
-                    }
-                )
-                st.session_state[_SESSION_PENDING] = True
-                st.rerun()
+                _dispatch_user_message(prompt, client)
 
 
 # --------------------------------------------------------------------------- #
@@ -414,12 +409,6 @@ def render_workspace(
             ),
             unsafe_allow_html=True,
         )
-
-    pending = bool(st.session_state.get(_SESSION_PENDING))
-    if pending:
-        st.markdown(render_chat_skeleton(), unsafe_allow_html=True)
-        _render_create_ticket_button(None, ticket_client)
-        return
 
     if latest_message is None:
         st.markdown(
@@ -924,7 +913,7 @@ def main() -> None:
     st.markdown(render_app_bar(client.base_url), unsafe_allow_html=True)
 
     # Sidebar (renders the example prompts + backend config).
-    render_sidebar()
+    render_sidebar(client)
 
     # Sidebar state is "expanded" by default; the main content area
     # already excludes the sidebar's width.

@@ -26,6 +26,7 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
+from apps.frontend.chat_client import ChatClient, ChatResponse
 from apps.frontend.ticket_client import TicketClient, TicketDraft, TicketPreview
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -185,24 +186,77 @@ def test_workspace_create_ticket_button_enabled_when_incident_present() -> None:
     assert button_block.disabled is False
 
 
-def test_workspace_renders_loading_skeleton_when_pending() -> None:
-    """``st.session_state['pending']=True`` causes the workspace
-    to render the loading state (Story 7.2.3) rather than the
-    panels. The render is a markdown block (the new theme); the
-    indicator is the absence of the empty-state hint and the
-    presence of the "Investigating…" title."""
-    at = AppTest.from_file(str(_UI_SCRIPT))
-    at.session_state["ticket_client"] = _stub_ticket_client()
-    at.session_state["client"] = _stub_ticket_client()
-    at.session_state["pending"] = True
-    at.run()
+def test_sidebar_suggested_prompt_dispatches_chat() -> None:
+    """Regression: clicking a sidebar suggested prompt must call the
+    backend's ``/chat`` and land the assistant reply in the history.
+    Previously the sidebar handler set a ``pending`` flag and reran
+    without ever calling ``client.send``, so the workspace stayed on
+    "Investigating…" indefinitely."""
 
-    assert not at.exception
-    joined = "\n".join(m.value for m in at.markdown)
-    # In the pending state the empty-state hint is replaced by
-    # the loading skeleton.
-    assert "Workspace empty" not in joined
-    assert "Investigating" in joined or "Connect" in joined
+    class _StubChatClient(ChatClient):
+        def __init__(self) -> None:  # type: ignore[no-super-call]
+            self._base_url = "http://stub"
+            self.calls: list[dict[str, object]] = []
+
+        def send(self, *, message: str, conversation_id: str | None = None, trace_id: str | None = None) -> ChatResponse:  # type: ignore[override]
+            self.calls.append(
+                {"message": message, "conversation_id": conversation_id}
+            )
+            return ChatResponse(
+                conversation_id="conv-test",
+                answer="Recurring high-temp alarms traced to feed pump 101.",
+                citations=[{"doc_id": "doc-procedure-boiler-b101"}],
+                trace=[{
+                    "server": "alarm-management",
+                    "tool": "search_assets",
+                    "args": {},
+                    "output": None,
+                    "duration_ms": 10,
+                    "outcome": "success",
+                    "error": None,
+                    "retry_count": 0,
+                    "api_status_code": 200,
+                }],
+                rag_confidence="high",
+                dropped_count=0,
+                intent="investigate_recurring_alarms",
+                raw_payload={},
+                incident={
+                    "id": "INC-9001",
+                    "title": "Boiler B-101 tube leak suspect",
+                    "summary": "Inspect tube sheet",
+                    "severity": "critical",
+                    "likely_cause": "Tube sheet leak",
+                    "recommended_actions": ["Inspect tube sheet"],
+                    "citations": [],
+                    "similar_tickets": [],
+                    "created_at": "2026-08-10T10:00:00Z",
+                },
+            )
+
+    stub = _StubChatClient()
+    at = AppTest.from_file(str(_UI_SCRIPT)).run()
+    at.session_state["client"] = stub
+    at.session_state["ticket_client"] = _stub_ticket_client()
+
+    # Simulate the operator clicking the first suggested prompt.
+    assert len(at.sidebar.button) > 0, "no sidebar buttons rendered"
+    at.sidebar.button[0].click().run()
+
+    assert not at.exception, f"UI raised: {at.exception}"
+    # The chat client must have been invoked exactly once.
+    assert len(stub.calls) == 1, f"expected 1 call, got {len(stub.calls)}"
+    # The user's question should be the message that went out.
+    assert stub.calls[0]["message"].startswith(
+        "Investigate recurring high-severity alarms"
+    )
+    # The assistant's answer must now appear in the chat history.
+    messages = at.session_state["messages"]
+    assert any(
+        m["role"] == "assistant"
+        and "Recurring high-temp alarms" in m["content"]
+        for m in messages
+    ), f"assistant reply missing from history: {messages}"
 
 
 def _assistant_message_with_incident() -> dict:
