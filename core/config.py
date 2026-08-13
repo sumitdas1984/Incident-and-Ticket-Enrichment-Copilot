@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     # without an API key. The "llm" planner invokes the configured
     # LLM provider.
     planner_provider: Literal["mock", "llm"] = "mock"
+    # Embedder backend used by the orchestrator at query time.
+    # Must match the embedder that built ``index_path`` — the
+    # ``_build_rag`` wiring raises on mismatch (see
+    # ``docs/known-limitations.md`` § 7).
+    embedder_backend: Literal["deterministic", "sentence-transformers"] = (
+        "deterministic"
+    )
     # Path to the persisted RAG index (Feature 4.1 artefact).
     index_path: str = "./var/index/v1.pkl"
 

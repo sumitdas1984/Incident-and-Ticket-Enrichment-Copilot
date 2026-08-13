@@ -55,6 +55,17 @@ class EmbeddingModel(Protocol):
     deterministic. The pipeline only sees this boundary.
     """
 
+    @property
+    def model_name(self) -> str:
+        """Stable identifier for the embedder.
+
+        Used by :func:`rag.ingestion.pipeline._embedder_name` to
+        stamp :class:`IndexMetadata` at ingestion time, and by
+        the orchestrator wiring to detect index-vs-runtime
+        mismatches before retrieval starts producing nonsense.
+        """
+        ...
+
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Return one ``dimension``-long vector per input string.
 
@@ -120,7 +131,13 @@ class SentenceTransformerEmbeddingModel:
 
     @property
     def model_name(self) -> str:
-        return self._model_name
+        """Stable identifier; mirrors
+        ``rag.ingestion.pipeline._embedder_name`` so the
+        orchestrator's index-vs-runtime guard compares apples
+        to apples (``sentence-transformers:all-MiniLM-L6-v2``
+        on both sides, not the bare model name on one side).
+        """
+        return f"sentence-transformers:{self._model_name}"
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         vectors = self._model.encode(
@@ -154,6 +171,14 @@ class DeterministicEmbeddingModel:
     @property
     def dimension(self) -> int:
         return self._dimension
+
+    @property
+    def model_name(self) -> str:
+        # Mirrors the format produced by
+        # ``rag.ingestion.pipeline._embedder_name`` so the
+        # orchestrator's index-vs-runtime guard sees a stable
+        # identifier for the deterministic embedder.
+        return f"deterministic:{self._dimension}"
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         return [_hash_to_vector(t, self._dimension) for t in texts]
