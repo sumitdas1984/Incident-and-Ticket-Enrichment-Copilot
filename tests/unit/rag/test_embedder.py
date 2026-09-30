@@ -53,6 +53,15 @@ def test_deterministic_embedder_handles_higher_dimensions() -> None:
     assert len(v) == 768
 
 
+def test_deterministic_embedder_has_namespaced_model_name() -> None:
+    """Pin the wire format so the orchestrator's index-vs-runtime
+    guard compares apples to apples. The pipeline stamps
+    ``deterministic:<dim>`` on the index metadata; the embedder
+    property must match."""
+    model = DeterministicEmbeddingModel(dimension=384)
+    assert model.model_name == "deterministic:384"
+
+
 @pytest.mark.slow_embeddings
 def test_sentence_transformer_embedder_shape() -> None:
     # CI excludes this marker (see ``.github/workflows/ci.yml``)
@@ -70,3 +79,17 @@ def test_sentence_transformer_embedder_shape() -> None:
     vectors = embedder.embed(["hello", "world"])
     assert len(vectors) == 2
     assert all(len(v) == 384 for v in vectors)
+
+
+@pytest.mark.slow_embeddings
+def test_sentence_transformer_embedder_has_namespaced_model_name() -> None:
+    """Pin the wire format for the sentence-transformers embedder
+    too. The pipeline stamps ``sentence-transformers:<model_name>``
+    on the index metadata; the embedder property must match the
+    same format, otherwise the orchestrator's index-vs-runtime
+    guard will reject a matched pair."""
+    pytest.importorskip("sentence_transformers")
+    from rag.ingestion import SentenceTransformerEmbeddingModel
+
+    embedder = SentenceTransformerEmbeddingModel(model_name="all-MiniLM-L6-v2")
+    assert embedder.model_name == "sentence-transformers:all-MiniLM-L6-v2"

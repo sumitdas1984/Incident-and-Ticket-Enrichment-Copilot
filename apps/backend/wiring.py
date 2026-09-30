@@ -135,16 +135,22 @@ def build_orchestrator(
 def _build_rag(*, index_path: Path, settings: Settings) -> RagStepExecutor:
     """Build the RAG step executor from the persisted index.
 
-    The retrieval service is constructed with the deterministic
-    embedder (the same one the committed tests use) so the
-    orchestrator's demo path doesn't need network access. The
-    real ``SentenceTransformerEmbeddingModel`` is wired in via
-    a follow-up; the key constraint is that the embedder
-    matches the one that built the index.
+    The retrieval service is constructed with the embedder
+    selected by ``settings.embedder_backend``. The default is
+    ``deterministic`` so the demo path is hermetic and instant;
+    production flips the env var to ``sentence-transformers``
+    and re-ingests with the matching ``--embedder`` flag.
+
+    The embedder's ``model_name`` must match the
+    ``IndexMetadata.embedder_name`` written by the pipeline at
+    ingestion time. A mismatch raises explicitly so the operator
+    does not silently retrieve nonsense (closed-out limitation
+    #7 in ``docs/known-limitations.md``).
     """
     from rag.ingestion import (
         DeterministicEmbeddingModel,
         InMemoryVectorIndex,
+        SentenceTransformerEmbeddingModel,
     )
     from rag.retrieval import RetrievalService
 
@@ -154,7 +160,27 @@ def _build_rag(*, index_path: Path, settings: Settings) -> RagStepExecutor:
             "Run `make ingest` to build it."
         )
     index = InMemoryVectorIndex.load(index_path)
-    embedder = DeterministicEmbeddingModel(dimension=index.metadata.dimension)
+
+    if settings.embedder_backend == "sentence-transformers":
+        embedder: DeterministicEmbeddingModel | SentenceTransformerEmbeddingModel = (
+            SentenceTransformerEmbeddingModel(dimension=index.metadata.dimension)
+        )
+    else:
+        embedder = DeterministicEmbeddingModel(dimension=index.metadata.dimension)
+
+    # Guard against the historic footgun: a query embedder that
+    # was not the one that built the index produces cosine
+    # scores that look plausible but mean nothing. Refuse early.
+    if embedder.model_name != index.metadata.embedder_name:
+        raise LLMError(
+            f"Embedder mismatch: index was built with "
+            f"{index.metadata.embedder_name!r} but the configured "
+            f"embedder is {embedder.model_name!r}. Re-ingest with "
+            f"`python -m rag.ingestion --embedder "
+            f"{settings.embedder_backend}` or set "
+            f"EMBEDDER_BACKEND to match the index."
+        )
+
     service = RetrievalService(index=index, embedder=embedder)
     return RagStepExecutor(service=service)
 

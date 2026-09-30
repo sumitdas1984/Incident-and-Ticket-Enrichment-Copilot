@@ -108,25 +108,34 @@ default for production. Configure ``LLM_PROVIDER=openai`` (or
 ``anthropic``) and ``LLM_API_KEY`` and the orchestrator
 switches to the LLM-driven planner automatically.
 
-## 7. Embedder mismatch raises, not warns
+## 7. Embedder backend is config-driven (closed)
 
-If the persisted RAG index was built with a different
-embedder than the one wired at runtime, the orchestrator
-silently produces nonsense scores. The retrieval *returns*
-something (the chain completes), but the cosine similarities
-are meaningless.
+The orchestrator's runtime embedder is selected by
+``EMBEDDER_BACKEND`` in ``.env`` (default
+``deterministic``). The wiring in
+``apps/backend/wiring.py:_build_rag`` compares the wired
+embedder's ``model_name`` against the index's
+``IndexMetadata.embedder_name`` and raises ``LLMError`` on
+mismatch, so the operator never silently retrieves
+nonsense.
 
-**Why documented:** the current code does not validate the
-embedder. The shipped index is built with the deterministic
-embedder; the orchestrator uses the deterministic embedder.
-The mismatch surfaces naturally when the operator changes
-the wiring.
+To run with the real model:
 
-**What it would take to lift:** compare
-:attr:`IndexMetadata.embedder_name` against the wired
-embedder's name and refuse to query if they differ. The
-:class:`~rag.ingestion.InMemoryVectorIndex` already exposes
-the metadata field.
+```bash
+# Rebuild the index with the real embedder
+uv run python -m rag.ingestion \
+  --corpus rag/documents \
+  --index var/index/v1.pkl \
+  --embedder sentence-transformers
+
+# Switch the runtime to match
+echo "EMBEDDER_BACKEND=sentence-transformers" >> .env
+```
+
+The shipped index is built with the deterministic embedder
+so the demo path is hermetic. The guard was added to close
+out the historic "the orchestrator silently produces
+nonsense if the embedders don't match" footgun.
 
 ## 8. Static seeded ticket list (Feature 5.2)
 

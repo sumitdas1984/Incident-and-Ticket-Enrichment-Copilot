@@ -120,8 +120,17 @@ def run_ingestion(
 
 
 def _embedder_name(embedder: EmbeddingModel) -> str:
+    # ``SentenceTransformerEmbeddingModel.model_name`` already
+    # includes the ``sentence-transformers:`` prefix (see
+    # :file:`embedder.py`), and ``DeterministicEmbeddingModel.model_name``
+    # is not part of its public surface — only ``.dimension`` is.
+    # Return whatever the embedder declares, prefixed only when the
+    # embedder does NOT do it itself. Wrapping again here produced a
+    # doubled ``sentence-transformers:sentence-transformers:...`` prefix
+    # in the persisted index, which then tripped the orchestrator's
+    # runtime-vs-index guard at ``apps/backend/wiring.py:174``.
     if isinstance(embedder, SentenceTransformerEmbeddingModel):
-        return f"sentence-transformers:{embedder.model_name}"
+        return embedder.model_name
     if isinstance(embedder, DeterministicEmbeddingModel):
         return f"deterministic:{embedder.dimension}"
     return type(embedder).__name__

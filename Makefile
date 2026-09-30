@@ -68,8 +68,21 @@ validate-api-only:
 		--token $${ALARM_API_TOKEN:-demo-token} \
 		--report-dir newman-report
 
+# Derive the embedder from .env so `make ingest` stays in sync with the
+# runtime (Fix: silent mismatch between persisted index and runtime
+# embedder caused copilot-backend to crash on boot). Falls back to
+# `deterministic` if .env is missing the var. Per-invocation override:
+# `make ingest EMBEDDER=sentence-transformers`.
+EMBEDDER := $(shell grep '^EMBEDDER_BACKEND=' .env 2>/dev/null | cut -d= -f2)
+ifeq ($(strip $(EMBEDDER)),)
+EMBEDDER := deterministic
+endif
+
 ingest:
-	uv run python -m rag.ingestion --corpus rag/documents --index var/index/v1.pkl
+	uv run python -m rag.ingestion \
+		--corpus rag/documents \
+		--index var/index/v1.pkl \
+		--embedder $(EMBEDDER)
 
 run-alarm-api:
 	@ALARM_API_TOKEN=$${ALARM_API_TOKEN:-demo-token} uv run python -m connectors.alarm_api
